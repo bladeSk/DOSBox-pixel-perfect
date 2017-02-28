@@ -1,0 +1,8 @@
+# Ignore everything..
+/*
+
+# ..except these:
+!.gitignore
+!/*.sln
+!/*.vcproj
+!/*.vcxproj
