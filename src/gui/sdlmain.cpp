@@ -165,6 +165,7 @@ struct SDL_Block {
 		Bitu flags;
 		double scalex,scaley;
 		GFX_CallBack_t callback;
+		bool pixelPerfect;
 	} draw;
 	bool wait_on_error;
 	struct {
@@ -485,7 +486,11 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 	if (fixedWidth && fixedHeight) {
 		double ratio_w=(double)fixedWidth/(sdl.draw.width*sdl.draw.scalex);
 		double ratio_h=(double)fixedHeight/(sdl.draw.height*sdl.draw.scaley);
-		if ( ratio_w < ratio_h) {
+		if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
+			double scale = min(floor(ratio_w), floor(ratio_h));
+			sdl.clip.w = sdl.draw.width * scale;
+			sdl.clip.h = sdl.draw.height * scale;
+		} else if (ratio_w < ratio_h) {
 			sdl.clip.w=fixedWidth;
 			sdl.clip.h=(Bit16u)(sdl.draw.height*sdl.draw.scaley*ratio_w + 0.1); //possible rounding issues
 		} else {
@@ -687,7 +692,7 @@ dosurface:
 		}
 		sdl.opengl.framebuf=0;
 		if (!(flags&GFX_CAN_32) || (flags & GFX_RGBONLY)) goto dosurface;
-		int texsize=2 << int_log2(width > height ? width : height);
+		int texsize = (width > height ? width : height);
 		if (texsize>sdl.opengl.max_texsize) {
 			LOG_MSG("SDL:OPENGL: No support for texturesize of %d, falling back to surface",texsize);
 			goto dosurface;
@@ -719,7 +724,7 @@ dosurface:
 		// No borders
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-		if (sdl.opengl.bilinear) {
+		if (sdl.opengl.bilinear && !sdl.draw.pixelPerfect) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		} else {
@@ -1281,6 +1286,8 @@ static void GUI_StartUp(Section * sec) {
 	/* Setup Mouse correctly if fullscreen */
 	if(sdl.desktop.fullscreen) GFX_CaptureMouse();
 
+	sdl.draw.pixelPerfect = section->Get_bool("pixelperfect");
+
 	if (output == "surface") {
 		sdl.desktop.want_type=SCREEN_SURFACE;
 #if (HAVE_DDRAW_H) && defined(WIN32)
@@ -1698,6 +1705,9 @@ void Config_Add_SDL() {
 	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"surface");
 	Pstring->Set_help("What video system to use for output.");
 	Pstring->Set_values(outputs);
+
+	Pbool = sdl_sec->Add_bool("pixelperfect", Property::Changeable::Always, true);
+	Pbool->Set_help("Adjust scale so that the output pixels are perfect squares. Recommended with with output=openglnb and scaler=none.");
 
 	Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always,true);
 	Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
