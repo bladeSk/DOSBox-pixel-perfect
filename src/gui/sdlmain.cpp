@@ -50,6 +50,16 @@
 #include "cross.h"
 #include "control.h"
 
+
+#if _MSC_VER >= 1400
+FILE _iob[] = { *stdin, *stdout, *stderr };
+
+extern "C" FILE * __cdecl __iob_func(void) {
+	return _iob;
+}
+#endif
+
+
 #define MAPPERFILE "mapper-" VERSION ".map"
 //#define DISABLE_JOYSTICK
 
