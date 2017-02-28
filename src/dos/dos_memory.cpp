@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2010  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-/* $Id: dos_memory.cpp,v 1.45 2009-07-15 17:05:07 c2woody Exp $ */
 
 #include "dosbox.h"
 #include "mem.h"
@@ -34,7 +33,8 @@ static void DOS_CompressMemory(void) {
 
 	while (mcb.GetType()!=0x5a) {
 		mcb_next.SetPt((Bit16u)(mcb_segment+mcb.GetSize()+1));
-		if ((mcb.GetPSPSeg()==0) && (mcb_next.GetPSPSeg()==0)) {
+		if (GCC_UNLIKELY((mcb_next.GetType()!=0x4d) && (mcb_next.GetType()!=0x5a))) E_Exit("Corrupt MCB chain");
+		if ((mcb.GetPSPSeg()==MCB_FREE) && (mcb_next.GetPSPSeg()==MCB_FREE)) {
 			mcb.SetSize(mcb.GetSize()+mcb_next.GetSize()+1);
 			mcb.SetType(mcb_next.GetType());
 		} else {
@@ -59,6 +59,7 @@ void DOS_FreeProcessMemory(Bit16u pspseg) {
 				mcb.SetType(0x4d);
 			} else break;
 		}
+		if (GCC_UNLIKELY(mcb.GetType()!=0x4d)) E_Exit("Corrupt MCB chain");
 		mcb_segment+=mcb.GetSize()+1;
 		mcb.SetPt(mcb_segment);
 	}
@@ -112,7 +113,7 @@ bool DOS_AllocateMemory(Bit16u * segment,Bit16u * blocks) {
 	Bit16u found_seg=0,found_seg_size=0;
 	for (;;) {
 		mcb.SetPt(mcb_segment);
-		if (mcb.GetPSPSeg()==0) {
+		if (mcb.GetPSPSeg()==MCB_FREE) {
 			/* Check for enough free memory in current block */
 			Bit16u block_size=mcb.GetSize();			
 			if (block_size<(*blocks)) {
@@ -246,6 +247,7 @@ bool DOS_ResizeMemory(Bit16u segment,Bit16u * blocks) {
 		mcb_new_next.SetSize(total-*blocks-1);
 		mcb_new_next.SetPSPSeg(MCB_FREE);
 		mcb.SetPSPSeg(dos.psp());
+		DOS_CompressMemory();
 		return true;
 	}
 	/* MCB will grow, try to join with following MCB */
@@ -436,7 +438,7 @@ void DOS_SetupMemory(void) {
 	if (machine==MCH_TANDY) {
 		/* memory up to 608k available, the rest (to 640k) is used by
 			the tandy graphics system's variable mapping of 0xb800 */
-		mcb.SetSize(0x97FF - DOS_MEM_START - mcb_sizes);
+		mcb.SetSize(0x9BFF - DOS_MEM_START - mcb_sizes);
 	} else if (machine==MCH_PCJR) {
 		/* memory from 128k to 640k is available */
 		mcb_devicedummy.SetPt((Bit16u)0x2000);

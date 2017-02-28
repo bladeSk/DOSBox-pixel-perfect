@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2010  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-/* $Id: render.cpp,v 1.60 2009-04-26 19:14:50 harekiet Exp $ */
 
 #include <sys/types.h>
 #include <assert.h>
@@ -520,7 +519,7 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double ratio,bool 
 		return;	
 	}
 	if ( ratio > 1 ) {
-		double target = height * ratio + 0.1;
+		double target = height * ratio + 0.025;
 		ratio = target / height;
 	} else {
 		//This would alter the width of the screen, we don't care about rounding errors here

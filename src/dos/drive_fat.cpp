@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2010  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-/* $Id: drive_fat.cpp,v 1.28 2009-06-19 18:28:10 c2woody Exp $ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +27,7 @@
 #include "support.h"
 #include "cross.h"
 #include "bios.h"
+#include "bios_disk.h"
 
 #define IMGTYPE_FLOPPY 0
 #define IMGTYPE_ISO    1
@@ -36,9 +36,6 @@
 #define FAT12		   0
 #define FAT16		   1
 #define FAT32		   2
-
-Bit8u fatSectBuffer[1024];
-Bit32u curFatSect;
 
 class fatFile : public DOS_File {
 public:
@@ -529,6 +526,10 @@ Bit32u fatDrive::getAbsoluteSectFromChain(Bit32u startClustNum, Bit32u logicalSe
 		}
 		if((isEOF) && (skipClust>=1)) {
 			//LOG_MSG("End of cluster chain reached before end of logical sector seek!");
+			if (skipClust == 1 && fattype == FAT12) {
+				//break;
+				LOG(LOG_DOSMISC,LOG_ERROR)("End of cluster chain reached, but maybe good afterall ?");
+			}
 			return 0;
 		}
 		currentClust = testvalue;
@@ -679,6 +680,49 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 	}
 
 	loadedDisk->Read_AbsoluteSector(0+partSectOff,&bootbuffer);
+
+	/* Check for DOS 1.x format floppy */
+	if ((bootbuffer.mediadescriptor & 0xf0) != 0xf0 && filesize <= 360) {
+
+		Bit8u sectorBuffer[512];
+		loadedDisk->Read_AbsoluteSector(1,&sectorBuffer);
+		Bit8u mdesc = sectorBuffer[0];
+
+		/* Allowed if media descriptor in FAT matches image size  */
+		if ((mdesc == 0xfc && filesize == 180) ||
+			(mdesc == 0xfd && filesize == 360) ||
+			(mdesc == 0xfe && filesize == 160) ||
+			(mdesc == 0xff && filesize == 320)) {
+
+			/* Create parameters for a 160kB floppy */
+			bootbuffer.bytespersector = 512;
+			bootbuffer.sectorspercluster = 1;
+			bootbuffer.reservedsectors = 1;
+			bootbuffer.fatcopies = 2;
+			bootbuffer.rootdirentries = 64;
+			bootbuffer.totalsectorcount = 320;
+			bootbuffer.mediadescriptor = mdesc;
+			bootbuffer.sectorsperfat = 1;
+			bootbuffer.sectorspertrack = 8;
+			bootbuffer.headcount = 1;
+			bootbuffer.magic1 = 0x55;	// to silence warning
+			bootbuffer.magic2 = 0xaa;
+			if (!(mdesc & 0x2)) {
+				/* Adjust for 9 sectors per track */
+				bootbuffer.totalsectorcount = 360;
+				bootbuffer.sectorsperfat = 2;
+				bootbuffer.sectorspertrack = 9;
+			}
+			if (mdesc & 0x1) {
+				/* Adjust for 2 sides */
+				bootbuffer.sectorspercluster = 2;
+				bootbuffer.rootdirentries = 112;
+				bootbuffer.totalsectorcount *= 2;
+				bootbuffer.headcount = 2;
+			}
+		}
+	}
+
 	if ((bootbuffer.magic1 != 0x55) || (bootbuffer.magic2 != 0xaa)) {
 		/* Not a FAT filesystem */
 		LOG_MSG("Loaded image has no valid magicnumbers at the end!");
@@ -725,6 +769,9 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 
 	memset(fatSectBuffer,0,1024);
 	curFatSect = 0xffffffff;
+
+	strcpy(info, "fatDrive ");
+	strcat(info, sysFilename);
 }
 
 bool fatDrive::AllocationInfo(Bit16u *_bytes_sector, Bit8u *_sectors_cluster, Bit16u *_total_clusters, Bit16u *_free_clusters) {
@@ -856,6 +903,7 @@ bool fatDrive::FileUnlink(char * name) {
 
 bool fatDrive::FindFirst(char *_dir, DOS_DTA &dta,bool /*fcb_findfirst*/) {
 	direntry dummyClust;
+#if 0
 	Bit8u attr;char pattern[DOS_NAMELENGTH_ASCII];
 	dta.GetSearchParams(attr,pattern);
 	if(attr==DOS_ATTR_VOLUME) {
@@ -868,6 +916,7 @@ bool fatDrive::FindFirst(char *_dir, DOS_DTA &dta,bool /*fcb_findfirst*/) {
 	}
 	if(attr & DOS_ATTR_VOLUME) //check for root dir or fcb_findfirst
 		LOG(LOG_DOSMISC,LOG_WARN)("findfirst for volumelabel used on fatDrive. Unhandled!!!!!");
+#endif
 	if(!getDirClustNum(_dir, &cwdDirCluster, false)) {
 		DOS_SetError(DOSERR_PATH_NOT_FOUND);
 		return false;
@@ -914,6 +963,10 @@ nextfile:
 	entryoffset = dirPos % 16;
 
 	if(dirClustNumber==0) {
+		if(dirPos >= bootbuffer.rootdirentries) {
+			DOS_SetError(DOSERR_NO_MORE_FILES);
+			return false;
+		}
 		loadedDisk->Read_AbsoluteSector(firstRootDirSect+logentsector,sectbuf);
 	} else {
 		tmpsector = getAbsoluteSectFromChain(dirClustNumber, logentsector);
@@ -935,26 +988,37 @@ nextfile:
 		DOS_SetError(DOSERR_NO_MORE_FILES);
 		return false;
 	}
-
 	memset(find_name,0,DOS_NAMELENGTH_ASCII);
 	memset(extension,0,4);
 	memcpy(find_name,&sectbuf[entryoffset].entryname[0],8);
 	memcpy(extension,&sectbuf[entryoffset].entryname[8],3);
 	trimString(&find_name[0]);
 	trimString(&extension[0]);
-	if(!(sectbuf[entryoffset].attrib & DOS_ATTR_DIRECTORY) || extension[0]!=0) { 
+	
+	//if(!(sectbuf[entryoffset].attrib & DOS_ATTR_DIRECTORY))
+	if (extension[0]!=0) {
 		strcat(find_name, ".");
 		strcat(find_name, extension);
 	}
 
-	/* Ignore files with volume label. FindFirst should search for those. (return the first one found) */
-	if(sectbuf[entryoffset].attrib & 0x8) goto nextfile;
-   
-	/* Always find ARCHIVES even if bit is not set  Perhaps test is not the best test */
-	if(~attrs & sectbuf[entryoffset].attrib & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM) )  goto nextfile;
+	/* Compare attributes to search attributes */
+
+	//TODO What about attrs = DOS_ATTR_VOLUME|DOS_ATTR_DIRECTORY ?
+	if (attrs == DOS_ATTR_VOLUME) {
+		if (!(sectbuf[entryoffset].attrib & DOS_ATTR_VOLUME)) goto nextfile;
+		dirCache.SetLabel(find_name, false, true);
+	} else {
+		if (~attrs & sectbuf[entryoffset].attrib & (DOS_ATTR_DIRECTORY | DOS_ATTR_VOLUME | DOS_ATTR_SYSTEM | DOS_ATTR_HIDDEN) ) goto nextfile;
+	}
+
+
+	/* Compare name to search pattern */
 	if(!WildFileCmp(find_name,srch_pattern)) goto nextfile;
 
-	dta.SetResult(find_name, sectbuf[entryoffset].entrysize, sectbuf[entryoffset].crtDate, sectbuf[entryoffset].crtTime, sectbuf[entryoffset].attrib);
+	//dta.SetResult(find_name, sectbuf[entryoffset].entrysize, sectbuf[entryoffset].crtDate, sectbuf[entryoffset].crtTime, sectbuf[entryoffset].attrib);
+
+	dta.SetResult(find_name, sectbuf[entryoffset].entrysize, sectbuf[entryoffset].modDate, sectbuf[entryoffset].modTime, sectbuf[entryoffset].attrib);
+
 	memcpy(foundEntry, &sectbuf[entryoffset], sizeof(direntry));
 
 	return true;
@@ -983,11 +1047,13 @@ bool fatDrive::GetFileAttr(char *name, Bit16u *attr) {
 		/* Find directory entry in parent directory */
 		Bit32s fileidx = 2;
 		if (dirClust==0) fileidx = 0;	// root directory
-		while(directoryBrowse(dirClust, &fileEntry, fileidx)) {
+		Bit32s last_idx=0;
+		while(directoryBrowse(dirClust, &fileEntry, fileidx, last_idx)) {
 			if(memcmp(&fileEntry.entryname, &pathName[0], 11) == 0) {
 				*attr=fileEntry.attrib;
 				return true;
 			}
+			last_idx=fileidx;
 			fileidx++;
 		}
 		return false;
@@ -995,12 +1061,15 @@ bool fatDrive::GetFileAttr(char *name, Bit16u *attr) {
 	return true;
 }
 
-bool fatDrive::directoryBrowse(Bit32u dirClustNumber, direntry *useEntry, Bit32s entNum) {
+bool fatDrive::directoryBrowse(Bit32u dirClustNumber, direntry *useEntry, Bit32s entNum, Bit32s start/*=0*/) {
 	direntry sectbuf[16];	/* 16 directory entries per sector */
 	Bit32u logentsector;	/* Logical entry sector */
 	Bit32u entryoffset = 0;	/* Index offset within sector */
 	Bit32u tmpsector;
-	Bit16u dirPos = 0;
+	if ((start<0) || (start>65535)) return false;
+	Bit16u dirPos = (Bit16u)start;
+	if (entNum<start) return false;
+	entNum-=start;
 
 	while(entNum>=0) {
 

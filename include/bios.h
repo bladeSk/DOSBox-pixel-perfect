@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2010  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -103,9 +103,11 @@
 
 
 #define BIOS_DEFAULT_HANDLER_LOCATION	(RealMake(0xf000,0xff53))
+#define BIOS_DEFAULT_INT5_LOCATION		(RealMake(0xf000,0xff54))
 #define BIOS_DEFAULT_IRQ0_LOCATION		(RealMake(0xf000,0xfea5))
 #define BIOS_DEFAULT_IRQ1_LOCATION		(RealMake(0xf000,0xe987))
 #define BIOS_DEFAULT_IRQ2_LOCATION		(RealMake(0xf000,0xff55))
+#define BIOS_DEFAULT_RESET_LOCATION		(RealMake(0xf000,0xe05b))
 
 /* maximum of scancodes handled by keyboard bios routines */
 #define MAX_SCAN_CODE 0x58
