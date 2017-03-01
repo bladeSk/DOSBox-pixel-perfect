@@ -4,7 +4,7 @@
 
 This is a modified version of the original DOSBox for pixel purists, who like their pixels perfectly square.
 
-This mod add a pixel-perfect mode, which makes the rendered image fill as much of your screen as possible while keeping the pixels square and scaled to the nearest integer (e.g. 1x1, 2x2, 3x3, ...). This eliminates any uneven pixels and makes the resulting image super crisp.
+This mod adds a pixel-perfect mode, which makes the rendered image fill as much of your screen as possible while keeping the pixels square and scaled to the nearest integer (e.g. 1x1, 2x2, 3x3, ...). This eliminates any uneven pixels and makes the resulting image super crisp.
 
 
 ## Download
