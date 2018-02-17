@@ -34,6 +34,9 @@
 
 #include "cross.h"
 #include "SDL.h"
+#ifdef WIN32
+#include "SDL_syswm.h"
+#endif
 
 #include "dosbox.h"
 #include "video.h"
@@ -179,7 +182,8 @@ struct SDL_Block {
 		} window;
 		Bit8u bpp;
 		bool fullscreen;
-		bool lazy_fullscreen;
+        bool borderless;
+        bool lazy_fullscreen;
 		bool lazy_fullscreen_req;
 		bool doublebuf;
 		SCREEN_TYPES type;
@@ -288,6 +292,18 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	i_bpp = bpp;
 	i_flags = flags;
 #endif
+
+#ifdef WIN32
+    if (flags&SDL_NOFRAME) {
+        SDL_SysWMinfo wminfo = { 0 };
+        SDL_GetWMInfo(&wminfo);
+        HWND hwnd = wminfo.window;
+        //SetWindowLong(hwnd, GWL_STYLE, WS_POPUP);
+        
+        SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+#endif
+
 	return s;
 }
 
@@ -475,7 +491,11 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 	Bit16u fixedWidth;
 	Bit16u fixedHeight;
 
-	if (sdl.desktop.fullscreen) {
+	if (sdl.desktop.fullscreen && sdl.desktop.borderless) {
+		fixedWidth = sdl.desktop.full.fixed ? sdl.desktop.full.width : 0;
+		fixedHeight = sdl.desktop.full.fixed ? sdl.desktop.full.height : 0;
+		sdl_flags |= SDL_NOFRAME|SDL_HWSURFACE;
+	} else if (sdl.desktop.fullscreen) {
 		fixedWidth = sdl.desktop.full.fixed ? sdl.desktop.full.width : 0;
 		fixedHeight = sdl.desktop.full.fixed ? sdl.desktop.full.height : 0;
 		sdl_flags |= SDL_FULLSCREEN|SDL_HWSURFACE;
@@ -502,11 +522,13 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 			sdl.clip.w=(Bit16u)(sdl.draw.width*sdl.draw.scalex*ratio_h + 0.4);
 			sdl.clip.h=(Bit16u)fixedHeight;
 		}
-		if (sdl.desktop.fullscreen)
+		if (sdl.desktop.fullscreen && sdl.desktop.borderless)
+			sdl.surface = SDL_SetVideoMode_Wrap(fixedWidth,fixedHeight,bpp,sdl_flags);
+		else if (sdl.desktop.fullscreen)
 			sdl.surface = SDL_SetVideoMode_Wrap(fixedWidth,fixedHeight,bpp,sdl_flags);
 		else
 			sdl.surface = SDL_SetVideoMode_Wrap(sdl.clip.w,sdl.clip.h,bpp,sdl_flags);
-		if (sdl.surface && sdl.surface->flags & SDL_FULLSCREEN) {
+		if (sdl.surface && (sdl.surface->flags & SDL_FULLSCREEN) || sdl.desktop.borderless) {
 			sdl.clip.x=(Sint16)((sdl.surface->w-sdl.clip.w)/2);
 			sdl.clip.y=(Sint16)((sdl.surface->h-sdl.clip.h)/2);
 		} else {
@@ -1288,6 +1310,7 @@ static void GUI_StartUp(Section * sec) {
 	if(sdl.desktop.fullscreen) GFX_CaptureMouse();
 
 	sdl.draw.pixelPerfect = section->Get_bool("pixelperfect");
+	sdl.desktop.borderless= section->Get_bool("borderless");
 
 	if (output == "surface") {
 		sdl.desktop.want_type=SCREEN_SURFACE;
@@ -1709,6 +1732,9 @@ void Config_Add_SDL() {
 
 	Pbool = sdl_sec->Add_bool("pixelperfect", Property::Changeable::Always, true);
 	Pbool->Set_help("Adjust scale so that the output pixels are perfect squares. Recommended with with output=openglnb and scaler=none.");
+
+	Pbool = sdl_sec->Add_bool("borderless", Property::Changeable::Always, true);
+	Pbool->Set_help("Use borderless fullscreen window instead of actual fullscreen, this gives us free VSYNC on Vista/7/8/10 (Windows only).");
 
 	Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always,true);
 	Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
