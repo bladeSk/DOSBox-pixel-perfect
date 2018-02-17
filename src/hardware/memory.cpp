@@ -24,6 +24,8 @@
 #include "paging.h"
 #include "regs.h"
 
+#include "../save_state.h"
+
 #include <string.h>
 
 #define PAGES_IN_BLOCK	((1024*1024)/MEM_PAGE_SIZE)
@@ -74,7 +76,7 @@ public:
 		}
 #endif
 		return 0xff;
-	} 
+	}
 	void writeb(PhysPt addr,Bitu val) {
 #if C_DEBUG
 		LOG_MSG("Illegal write to %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
@@ -210,7 +212,7 @@ Bitu MEM_TotalPages(void) {
 
 Bitu MEM_FreeLargest(void) {
 	Bitu size=0;Bitu largest=0;
-	Bitu index=XMS_START;	
+	Bitu index=XMS_START;
 	while (index<memory.pages) {
 		if (!memory.mhandles[index]) {
 			size++;
@@ -226,7 +228,7 @@ Bitu MEM_FreeLargest(void) {
 
 Bitu MEM_FreeTotal(void) {
 	Bitu free=0;
-	Bitu index=XMS_START;	
+	Bitu index=XMS_START;
 	while (index<memory.pages) {
 		if (!memory.mhandles[index]) free++;
 		index++;
@@ -234,7 +236,7 @@ Bitu MEM_FreeTotal(void) {
 	return free;
 }
 
-Bitu MEM_AllocatedPages(MemHandle handle) 
+Bitu MEM_AllocatedPages(MemHandle handle)
 {
 	Bitu pages = 0;
 	while (handle>0) {
@@ -247,7 +249,7 @@ Bitu MEM_AllocatedPages(MemHandle handle)
 //TODO Maybe some protection for this whole allocation scheme
 
 INLINE Bitu BestMatch(Bitu size) {
-	Bitu index=XMS_START;	
+	Bitu index=XMS_START;
 	Bitu first=0;
 	Bitu best=0xfffffff;
 	Bitu best_first=0;
@@ -256,7 +258,7 @@ INLINE Bitu BestMatch(Bitu size) {
 		if (!first) {
 			/* Check if this is a free page */
 			if (!memory.mhandles[index]) {
-				first=index;	
+				first=index;
 			}
 		} else {
 			/* Check if this still is used page */
@@ -403,15 +405,15 @@ MemHandle MEM_NextHandle(MemHandle handle) {
 
 MemHandle MEM_NextHandleAt(MemHandle handle,Bitu where) {
 	while (where) {
-		where--;	
+		where--;
 		handle=memory.mhandles[handle];
 	}
 	return handle;
 }
 
 
-/* 
-	A20 line handling, 
+/*
+	A20 line handling,
 	Basically maps the 4 pages at the 1mb to 0mb in the default page directory
 */
 bool MEM_A20_Enabled(void) {
@@ -510,7 +512,7 @@ void mem_writed(PhysPt address,Bit32u val) {
 	mem_writed_inline(address,val);
 }
 
-static void write_p92(Bitu port,Bitu val,Bitu iolen) {	
+static void write_p92(Bitu port,Bitu val,Bitu iolen) {
 	// Bit 0 = system reset (switch back to real mode)
 	if (val&1) E_Exit("XMS: CPU reset via port 0x92 not supported.");
 	memory.a20.controlport = val & ~2;
@@ -541,14 +543,14 @@ class MEMORY:public Module_base{
 private:
 	IO_ReadHandleObject ReadHandler;
 	IO_WriteHandleObject WriteHandler;
-public:	
+public:
 	MEMORY(Section* configuration):Module_base(configuration){
 		Bitu i;
 		Section_prop * section=static_cast<Section_prop *>(configuration);
-	
+
 		/* Setup the Physical Page Links */
 		Bitu memsize=section->Get_int("memsize");
-	
+
 		if (memsize < 1) memsize = 1;
 		/* max 63 to solve problems with certain xms handlers */
 		if (memsize > MAX_MEMORY-1) {
@@ -598,11 +600,11 @@ public:
 		delete [] memory.phandlers;
 		delete [] memory.mhandles;
 	}
-};	
+};
 
-	
-static MEMORY* test;	
-	
+
+static MEMORY* test;
+
 static void MEM_ShutDown(Section * sec) {
 	delete test;
 }
@@ -611,4 +613,122 @@ void MEM_Init(Section * sec) {
 	/* shutdown function */
 	test = new MEMORY(sec);
 	sec->AddDestroyFunction(&MEM_ShutDown);
+}
+
+//save state support
+extern void* VGA_PageHandler_Func[16];
+
+void *Memory_PageHandler_table[] =
+{
+	NULL,
+	&ram_page_handler,
+	&rom_page_handler,
+
+	VGA_PageHandler_Func[0],
+	VGA_PageHandler_Func[1],
+	VGA_PageHandler_Func[2],
+	VGA_PageHandler_Func[3],
+	VGA_PageHandler_Func[4],
+	VGA_PageHandler_Func[5],
+	VGA_PageHandler_Func[6],
+	VGA_PageHandler_Func[7],
+	VGA_PageHandler_Func[8],
+	VGA_PageHandler_Func[9],
+	VGA_PageHandler_Func[10],
+	VGA_PageHandler_Func[11],
+	VGA_PageHandler_Func[12],
+	VGA_PageHandler_Func[13],
+	VGA_PageHandler_Func[14],
+	VGA_PageHandler_Func[15],
+};
+
+
+namespace
+{
+class SerializeMemory : public SerializeGlobalPOD
+{
+public:
+	SerializeMemory() : SerializeGlobalPOD("Memory")
+	{}
+
+private:
+	virtual void getBytes(std::ostream& stream)
+	{
+		Bit8u pagehandler_idx[0x10000];
+		int size_table;
+
+
+		// assume 256MB max memory
+		size_table = sizeof(Memory_PageHandler_table) / sizeof(void *);
+		for( int lcv=0; lcv<memory.pages; lcv++ ) {
+			pagehandler_idx[lcv] = 0xff;
+
+			for( int lcv2=0; lcv2<size_table; lcv2++ ) {
+				if( memory.phandlers[lcv] == Memory_PageHandler_table[lcv2] ) {
+					pagehandler_idx[lcv] = lcv2;
+					break;
+				}
+			}
+		}
+
+		//*******************************************
+		//*******************************************
+
+		SerializeGlobalPOD::getBytes(stream);
+
+		// - near-pure data
+		WRITE_POD( &memory, memory );
+
+		// - static 'new' ptr
+		WRITE_POD_SIZE( MemBase, memory.pages*4096 );
+
+		//***********************************************
+		//***********************************************
+
+		WRITE_POD_SIZE( memory.mhandles, sizeof(MemHandle) * memory.pages );
+		WRITE_POD( &pagehandler_idx, pagehandler_idx );
+	}
+
+	virtual void setBytes(std::istream& stream)
+	{
+		Bit8u pagehandler_idx[0x10000];
+		void *old_ptrs[4];
+
+		old_ptrs[0] = (void *) memory.phandlers;
+		old_ptrs[1] = (void *) memory.mhandles;
+		old_ptrs[2] = (void *) memory.lfb.handler;
+		old_ptrs[3] = (void *) memory.lfb.mmiohandler;
+
+		//***********************************************
+		//***********************************************
+
+		SerializeGlobalPOD::setBytes(stream);
+
+
+		// - near-pure data
+		READ_POD( &memory, memory );
+
+		// - static 'new' ptr
+		READ_POD_SIZE( MemBase, memory.pages*4096 );
+
+		//***********************************************
+		//***********************************************
+
+		memory.phandlers = (PageHandler **) old_ptrs[0];
+		memory.mhandles = (MemHandle *) old_ptrs[1];
+		memory.lfb.handler = (PageHandler *) old_ptrs[2];
+		memory.lfb.mmiohandler = (PageHandler *) old_ptrs[3];
+
+
+		READ_POD_SIZE( memory.mhandles, sizeof(MemHandle) * memory.pages );
+		READ_POD( &pagehandler_idx, pagehandler_idx );
+
+
+		for( int lcv=0; lcv<memory.pages; lcv++ ) {
+			if( pagehandler_idx[lcv] == 0xff ) continue;
+
+			memory.phandlers[lcv] = (PageHandler *) Memory_PageHandler_table[ pagehandler_idx[lcv] ];
+		}
+	}
+} dummy;
 }

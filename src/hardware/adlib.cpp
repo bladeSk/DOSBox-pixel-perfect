@@ -28,6 +28,8 @@
 #include "mem.h"
 #include "dbopl.h"
 
+#include "../save_state.h"
+
 namespace OPL2 {
 	#include "opl.cpp"
 
@@ -51,6 +53,42 @@ namespace OPL2 {
 		virtual void Init( Bitu rate ) {
 			adlib_init(rate);
 		}
+
+		virtual void SaveState( std::ostream& stream ) {
+			const char pod_name[32] = "OPL2";
+
+			if( stream.fail() ) return;
+
+
+			WRITE_POD( &pod_name, pod_name );
+
+			//************************************************
+			//************************************************
+			//************************************************
+
+			adlib_savestate(stream);
+		}
+
+		virtual void LoadState( std::istream& stream ) {
+			char pod_name[32] = {0};
+
+			if( stream.fail() ) return;
+
+
+			// error checking
+			READ_POD( &pod_name, pod_name );
+			if( strcmp( pod_name, "OPL2" ) ) {
+				stream.clear( std::istream::failbit | std::istream::badbit );
+				return;
+			}
+
+			//************************************************
+			//************************************************
+			//************************************************
+
+			adlib_loadstate(stream);
+		}
+
 		~Handler() {
 		}
 	};
@@ -80,6 +118,42 @@ namespace OPL3 {
 		virtual void Init( Bitu rate ) {
 			adlib_init(rate);
 		}
+
+		virtual void SaveState( std::ostream& stream ) {
+			const char pod_name[32] = "OPL3";
+
+			if( stream.fail() ) return;
+
+
+			WRITE_POD( &pod_name, pod_name );
+
+			//************************************************
+			//************************************************
+			//************************************************
+
+			adlib_savestate(stream);
+		}
+
+		virtual void LoadState( std::istream& stream ) {
+			char pod_name[32] = {0};
+
+			if( stream.fail() ) return;
+
+
+			// error checking
+			READ_POD( &pod_name, pod_name );
+			if( strcmp( pod_name, "OPL3" ) ) {
+				stream.clear( std::istream::failbit | std::istream::badbit );
+				return;
+			}
+
+			//************************************************
+			//************************************************
+			//************************************************
+
+			adlib_loadstate(stream);
+		}
+
 		~Handler() {
 		}
 	};
@@ -706,7 +780,9 @@ Module::Module( Section* configuration ) : Module_base(configuration) {
 	ctrl.mixer = section->Get_bool("sbmixer");
 
 	mixerChan = mixerObject.Install(OPL_CallBack,rate,"FM");
-	mixerChan->SetScale( 2.0 );
+	//Used to be 2.0, which was measured to be too high. Exact value depends on card/clone.
+	mixerChan->SetScale( 1.5f );  
+
 	if (oplemu == "fast") {
 		handler = new DBOPL::Handler();
 	} else if (oplemu == "compat") {
@@ -774,4 +850,81 @@ void OPL_ShutDown(Section* sec){
 	delete module;
 	module = 0;
 
+}
+
+// savestate support
+void Adlib::Module::SaveState( std::ostream& stream )
+{
+	// - pure data
+	WRITE_POD( &mode, mode );
+	WRITE_POD( &reg, reg );
+	WRITE_POD( &ctrl, ctrl );
+	WRITE_POD( &oplmode, oplmode );
+	WRITE_POD( &lastUsed, lastUsed );
+
+	handler->SaveState(stream);
+
+	WRITE_POD( &cache, cache );
+	WRITE_POD( &chip, chip );
+}
+
+
+void Adlib::Module::LoadState( std::istream& stream )
+{
+	// - pure data
+	READ_POD( &mode, mode );
+	READ_POD( &reg, reg );
+	READ_POD( &ctrl, ctrl );
+	READ_POD( &oplmode, oplmode );
+	READ_POD( &lastUsed, lastUsed );
+
+	handler->LoadState(stream);
+
+	READ_POD( &cache, cache );
+	READ_POD( &chip, chip );
+}
+
+
+void POD_Save_Adlib(std::ostream& stream)
+{
+	const char pod_name[32] = "Adlib";
+
+	if( stream.fail() ) return;
+	if( !module ) return;
+	if( !module->mixerChan ) return;
+
+
+	WRITE_POD( &pod_name, pod_name );
+
+	//************************************************
+	//************************************************
+	//************************************************
+
+	module->SaveState(stream);
+	module->mixerChan->SaveState(stream);
+}
+
+
+void POD_Load_Adlib(std::istream& stream)
+{
+	char pod_name[32] = {0};
+
+	if( stream.fail() ) return;
+	if( !module ) return;
+	if( !module->mixerChan ) return;
+
+
+	// error checking
+	READ_POD( &pod_name, pod_name );
+	if( strcmp( pod_name, "Adlib" ) ) {
+		stream.clear( std::istream::failbit | std::istream::badbit );
+		return;
+	}
+
+	//************************************************
+	//************************************************
+	//************************************************
+
+	module->LoadState(stream);
+	module->mixerChan->LoadState(stream);
 }

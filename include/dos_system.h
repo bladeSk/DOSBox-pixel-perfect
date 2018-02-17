@@ -78,18 +78,47 @@ public:
 	virtual void	AddRef()					{ refCtr++; };
 	virtual Bits	RemoveRef()					{ return --refCtr; };
 	virtual bool	UpdateDateTimeFromHost()	{ return true; }
+
+	virtual Bit32u	GetSeekPos()	{ return 0xffffffff; }
+
 	void SetDrive(Bit8u drv) { hdrive=drv;}
 	Bit8u GetDrive(void) { return hdrive;}
+
+	virtual void SaveState( std::ostream& stream );
+	virtual void LoadState( std::istream& stream );
+	virtual Bit32u PopState( std::istream& stream );
+
 	Bit32u flags;
 	Bit16u time;
 	Bit16u date;
 	Bit16u attr;
 	Bits refCtr;
 	bool open;
-	char* name;
+	char* name;		
 /* Some Device Specific Stuff */
 private:
 	Bit8u hdrive;
+};
+
+class localFile : public DOS_File {
+public:
+        localFile();
+	localFile(const char* name, FILE * handle);
+	bool Read(Bit8u * data,Bit16u * size);
+	bool Write(Bit8u * data,Bit16u * size);
+	bool Seek(Bit32u * pos,Bit32u type);
+	bool Close();
+	Bit16u GetInformation(void);
+	bool UpdateDateTimeFromHost(void);   
+	void FlagReadOnlyMedium(void);
+	void Flush(void);
+
+	Bit32u GetSeekPos(void);
+
+private:
+	FILE * fhandle;
+	bool read_only_medium;
+	enum { NONE,READ,WRITE } last_action;
 };
 
 class DOS_Device : public DOS_File {
@@ -247,6 +276,10 @@ public:
 
 	// disk cycling functionality (request resources)
 	virtual void Activate(void) {};
+
+	virtual void SaveState( std::ostream& stream );
+	virtual void LoadState( std::istream& stream );
+
 };
 
 enum { OPEN_READ=0, OPEN_WRITE=1, OPEN_READWRITE=2, OPEN_READ_NO_MOD=4, DOS_NOT_INHERIT=128};

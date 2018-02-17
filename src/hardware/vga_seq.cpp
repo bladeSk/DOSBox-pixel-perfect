@@ -21,6 +21,8 @@
 #include "inout.h"
 #include "vga.h"
 
+#include "../save_state.h"
+
 #define seq(blah) vga.seq.blah
 
 Bitu read_p3c4(Bitu /*port*/,Bitu /*iolen*/) {
@@ -158,3 +160,22 @@ void VGA_SetupSEQ(void) {
 	}
 }
 
+// save state support
+
+void POD_Save_VGA_Seq( std::ostream& stream )
+{
+	// - pure struct data
+	WRITE_POD( &vga.seq, vga.seq );
+
+
+	// no static globals found
+}
+
+
+void POD_Load_VGA_Seq( std::istream& stream )
+{
+	// - pure struct data
+	READ_POD( &vga.seq, vga.seq );
+
+	// no static globals found
+}

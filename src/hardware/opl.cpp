@@ -6,12 +6,12 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  *  This library is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
- * 
+ *
  *  You should have received a copy of the GNU Lesser General Public
  *  License along with this library; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -30,6 +30,7 @@
 #include "dosbox.h"
 #include "opl.h"
 
+#include "../save_state.h"
 
 static fltype recipsamp;	// inverse of sampling rate
 static Bit16s wavtable[WAVEPREC*3];	// wave form table
@@ -147,7 +148,7 @@ static fltype decrelconst[4] = {
 
 void operator_advance(op_type* op_pt, Bit32s vib) {
 	op_pt->wfpos = op_pt->tcount;						// waveform position
-	
+
 	// advance waveform time
 	op_pt->tcount += op_pt->tinc;
 	op_pt->tcount += (Bit32s)(op_pt->tinc)*vib/FIXEDPT;
@@ -327,7 +328,7 @@ void change_attackrate(Bitu regbase, op_type* op_pt) {
 		op_pt->env_step_a = (1<<(steps<=12?12-steps:0))-1;
 
 		Bits step_num = (step_skip<=48)?(4-(step_skip&3)):0;
-		static Bit8u step_skip_mask[5] = {0xff, 0xfe, 0xee, 0xba, 0xaa}; 
+		static Bit8u step_skip_mask[5] = {0xff, 0xfe, 0xee, 0xba, 0xaa};
 		op_pt->env_step_skip_a = step_skip_mask[step_num];
 
 #if defined(OPLTYPE_IS_OPL3)
@@ -1009,7 +1010,7 @@ void adlib_getsample(Bit16s* sndptr, Bits numsamples) {
 						operator_advance(&cptr[9],vibval1[i]);
 						opfuncs[cptr[9].op_state](&cptr[9]);
 						operator_output(&cptr[9],0,tremval1[i]);
-						
+
 						Bit32s chanval = cptr[9].cval*2;
 						CHANVAL_OUT
 					}
@@ -1041,7 +1042,7 @@ void adlib_getsample(Bit16s* sndptr, Bits numsamples) {
 						operator_advance(&cptr[9],vibval2[i]);
 						opfuncs[cptr[9].op_state](&cptr[9]);
 						operator_output(&cptr[9],cptr[0].cval*FIXEDPT,tremval2[i]);
-						
+
 						Bit32s chanval = cptr[9].cval*2;
 						CHANVAL_OUT
 					}
@@ -1355,7 +1356,7 @@ void adlib_getsample(Bit16s* sndptr, Bits numsamples) {
 
 					} else {
 						// FM-FM-style synthesis (op1[fb] * op2 * op3 * op4)
-						if ((cptr[0].op_state != OF_TYPE_OFF) || (cptr[9].op_state != OF_TYPE_OFF) || 
+						if ((cptr[0].op_state != OF_TYPE_OFF) || (cptr[9].op_state != OF_TYPE_OFF) ||
 							(cptr[3].op_state != OF_TYPE_OFF) || (cptr[3+9].op_state != OF_TYPE_OFF)) {
 							if ((cptr[0].vibrato) && (cptr[0].op_state != OF_TYPE_OFF)) {
 								vibval1 = vibval_var1;
@@ -1457,5 +1458,118 @@ void adlib_getsample(Bit16s* sndptr, Bits numsamples) {
 			clipit16(outbufl[i],sndptr++);
 #endif
 
+	}
+}
+
+// save state support
+void adlib_savestate( std::ostream& stream )
+{
+	Bit32u cur_wform_idx[MAXOPERATORS];
+
+
+	for( int lcv=0; lcv<MAXOPERATORS; lcv++ ) {
+		cur_wform_idx[lcv] = ((Bitu) (op[lcv].cur_wform)) - ((Bitu) &wavtable);
+	}
+
+	//****************************************************
+	//****************************************************
+	//****************************************************
+
+	// opl.cpp
+
+	// - pure data
+	WRITE_POD( &recipsamp, recipsamp );
+	WRITE_POD( &wavtable, wavtable );
+
+	WRITE_POD( &vibval_var1, vibval_var1 );
+	WRITE_POD( &vibval_var2, vibval_var2 );
+
+	//****************************************************
+	//****************************************************
+	//****************************************************
+
+	// opl.h
+
+	// - pure data
+	WRITE_POD( &chip_num, chip_num );
+
+	// - near-pure data
+	WRITE_POD( &op, op );
+
+	// - pure data
+	WRITE_POD( &int_samplerate, int_samplerate );
+	WRITE_POD( &status, status );
+	WRITE_POD( &opl_index, opl_index );
+	WRITE_POD( &adlibreg, adlibreg );
+	WRITE_POD( &wave_sel, wave_sel );
+
+	WRITE_POD( &vibtab_pos, vibtab_pos );
+	WRITE_POD( &vibtab_add, vibtab_add );
+	WRITE_POD( &tremtab_pos, tremtab_pos );
+	WRITE_POD( &tremtab_add, tremtab_add );
+	WRITE_POD( &generator_add, generator_add );
+
+
+
+
+	// - reloc ptr (!!!)
+	WRITE_POD( &cur_wform_idx, cur_wform_idx );
+}
+
+
+void adlib_loadstate( std::istream& stream )
+{
+	Bit32u cur_wform_idx[MAXOPERATORS];
+
+	//****************************************************
+	//****************************************************
+	//****************************************************
+
+	// opl.cpp
+
+	// - pure data
+	READ_POD( &recipsamp, recipsamp );
+	READ_POD( &wavtable, wavtable );
+
+	READ_POD( &vibval_var1, vibval_var1 );
+	READ_POD( &vibval_var2, vibval_var2 );
+
+	//****************************************************
+	//****************************************************
+	//****************************************************
+
+	// opl.h
+
+	// - pure data
+	READ_POD( &chip_num, chip_num );
+
+	// - near-pure data
+	READ_POD( &op, op );
+
+	// - pure data
+	READ_POD( &int_samplerate, int_samplerate );
+	READ_POD( &status, status );
+	READ_POD( &opl_index, opl_index );
+	READ_POD( &adlibreg, adlibreg );
+	READ_POD( &wave_sel, wave_sel );
+
+	READ_POD( &vibtab_pos, vibtab_pos );
+	READ_POD( &vibtab_add, vibtab_add );
+	READ_POD( &tremtab_pos, tremtab_pos );
+	READ_POD( &tremtab_add, tremtab_add );
+	READ_POD( &generator_add, generator_add );
+
+
+
+
+	// - reloc ptr (!!!)
+	READ_POD( &cur_wform_idx, cur_wform_idx );
+
+	//****************************************************
+	//****************************************************
+	//****************************************************
+
+	for( int lcv=0; lcv<MAXOPERATORS; lcv++ ) {
+		op[lcv].cur_wform = (Bit16s *) ((Bitu) &wavtable + cur_wform_idx[lcv]);
 	}
 }

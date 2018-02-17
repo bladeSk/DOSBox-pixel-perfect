@@ -27,11 +27,15 @@
 #include <cstring>
 #include <math.h>
 
+#include "../save_state.h"
+
 
 #define LEFT	0x00
 #define RIGHT	0x01
 #define CMS_BUFFER_SIZE 128
 #define CMS_RATE 22050
+/*#define MASTER_CLOCK 14318180/2 */
+#define MASTER_CLOCK 7159090
 
 
 typedef Bit8u UINT8;
@@ -205,9 +209,9 @@ static void saa1099_update(int chip, INT16 **buffer, int length)
     {
 		switch (saa->noise_params[ch])
 		{
-		case 0: saa->noise[ch].freq = 31250.0 * 2; break;
-		case 1: saa->noise[ch].freq = 15625.0 * 2; break;
-		case 2: saa->noise[ch].freq =  7812.5 * 2; break;
+		case 0: saa->noise[ch].freq = MASTER_CLOCK/256  * 2; break;
+		case 1: saa->noise[ch].freq = MASTER_CLOCK/512  * 2; break;
+		case 2: saa->noise[ch].freq = MASTER_CLOCK/1024 * 2; break;
 		case 3: saa->noise[ch].freq = saa->channels[ch * 3].freq; break;
 		}
 	}
@@ -221,7 +225,7 @@ static void saa1099_update(int chip, INT16 **buffer, int length)
 		for (ch = 0; ch < 6; ch++)
 		{
             if (saa->channels[ch].freq == 0.0)
-                saa->channels[ch].freq = (double)((2 * 15625) << saa->channels[ch].octave) /
+                saa->channels[ch].freq = (double)((2 * MASTER_CLOCK/512) << saa->channels[ch].octave) /
                     (511.0 - (double)saa->channels[ch].frequency);
 
             /* check the actual position in the square wave */
@@ -229,7 +233,7 @@ static void saa1099_update(int chip, INT16 **buffer, int length)
 			while (saa->channels[ch].counter < 0)
 			{
 				/* calculate new frequency now after the half wave is updated */
-				saa->channels[ch].freq = (double)((2 * 15625) << saa->channels[ch].octave) /
+				saa->channels[ch].freq = (double)((2 * MASTER_CLOCK/512) << saa->channels[ch].octave) /
 					(511.0 - (double)saa->channels[ch].frequency);
 
 				saa->channels[ch].counter += sample_rate;
@@ -495,4 +499,73 @@ void CMS_Init(Section* sec) {
 }
 void CMS_ShutDown(Section* sec) {
 	delete test;	       
+}
+
+// save state support
+void POD_Save_Gameblaster( std::ostream& stream )
+{
+	const char pod_name[32] = "CMS";
+
+	if( stream.fail() ) return;
+	if( !test ) return;
+	if( !cms_chan ) return;
+
+
+	WRITE_POD( &pod_name, pod_name );
+
+	//*******************************************
+	//*******************************************
+	//*******************************************
+
+	// - pure data
+	WRITE_POD( &sample_rate, sample_rate );
+	WRITE_POD( &saa1099, saa1099 );
+
+	WRITE_POD( &cms_buffer, cms_buffer );
+	WRITE_POD( &last_command, last_command );
+	WRITE_POD( &base_port, base_port );
+	WRITE_POD( &cms_detect_register, cms_detect_register );
+
+	//************************************************
+	//************************************************
+	//************************************************
+
+	cms_chan->SaveState(stream);
+}
+
+
+void POD_Load_Gameblaster( std::istream& stream )
+{
+	char pod_name[32] = {0};
+
+	if( stream.fail() ) return;
+	if( !test ) return;
+	if( !cms_chan ) return;
+
+
+	// error checking
+	READ_POD( &pod_name, pod_name );
+	if( strcmp( pod_name, "CMS" ) ) {
+		stream.clear( std::istream::failbit | std::istream::badbit );
+		return;
+	}
+
+	//*******************************************
+	//*******************************************
+	//*******************************************
+
+	// - pure data
+	READ_POD( &sample_rate, sample_rate );
+	READ_POD( &saa1099, saa1099 );
+
+	READ_POD( &cms_buffer, cms_buffer );
+	READ_POD( &last_command, last_command );
+	READ_POD( &base_port, base_port );
+	READ_POD( &cms_detect_register, cms_detect_register );
+
+	//************************************************
+	//************************************************
+	//************************************************
+
+	cms_chan->LoadState(stream);
 }

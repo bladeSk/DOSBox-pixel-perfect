@@ -31,6 +31,8 @@
 #include <cstring>
 #include <math.h>
 
+#include "../save_state.h"
+
 #define MAX_OUTPUT 0x7fff
 #define STEP 0x10000
 
@@ -583,4 +585,120 @@ void TANDYSOUND_ShutDown(Section* /*sec*/) {
 void TANDYSOUND_Init(Section* sec) {
 	test = new TANDYSOUND(sec);
 	sec->AddDestroyFunction(&TANDYSOUND_ShutDown,true);
+}
+
+// save state support
+void *TandyDAC_DMA_CallBack_Func = (void*)TandyDAC_DMA_CallBack;
+
+
+void POD_Save_Tandy_Sound( std::ostream& stream )
+{
+	const char pod_name[32] = "Tandy";
+
+	if( stream.fail() ) return;
+	if( !test ) return;
+	if( !tandy.chan ) return;
+
+
+	WRITE_POD( &pod_name, pod_name );
+
+	//*******************************************
+	//*******************************************
+	//*******************************************
+
+	Bit8u dma_idx;
+
+
+	dma_idx = 0xff;
+	for( int lcv=0; lcv<8; lcv++ ) {
+		if( tandy.dac.dma.chan == GetDMAChannel(lcv) ) { dma_idx = lcv; break; }
+	}
+
+	// *******************************************
+	// *******************************************
+	// *******************************************
+
+	// - pure data
+	WRITE_POD( &sn, sn );
+
+	// - near-pure data
+	WRITE_POD( &tandy, tandy );
+
+
+
+
+	// - reloc ptr
+	WRITE_POD( &dma_idx, dma_idx );
+
+	// *******************************************
+	// *******************************************
+	// *******************************************
+
+	tandy.chan->SaveState(stream);
+	tandy.dac.chan->SaveState(stream);
+}
+
+
+void POD_Load_Tandy_Sound( std::istream& stream )
+{
+	char pod_name[32] = {0};
+
+	if( stream.fail() ) return;
+	if( !test ) return;
+	if( !tandy.chan ) return;
+
+
+	// error checking
+	READ_POD( &pod_name, pod_name );
+	if( strcmp( pod_name, "Tandy" ) ) {
+		stream.clear( std::istream::failbit | std::istream::badbit );
+		return;
+	}
+
+	//************************************************
+	//************************************************
+	//************************************************
+
+	Bit8u dma_idx;
+	MixerChannel *chan_old, *dac_chan_old;
+
+
+	// - save static ptrs
+	chan_old = tandy.chan;
+	dac_chan_old = tandy.dac.chan;
+
+	// *******************************************
+	// *******************************************
+	// *******************************************
+
+	// - pure data
+	READ_POD( &sn, sn );
+
+	// - near-pure data
+	READ_POD( &tandy, tandy );
+
+
+
+
+	// - reloc ptr
+	READ_POD( &dma_idx, dma_idx );
+
+	// *******************************************
+	// *******************************************
+	// *******************************************
+
+	tandy.dac.dma.chan = NULL;
+	if( dma_idx != 0xff ) tandy.dac.dma.chan = GetDMAChannel(dma_idx);
+
+	// *******************************************
+	// *******************************************
+	// *******************************************
+
+	// - restore static ptrs
+	tandy.chan = chan_old;
+	tandy.dac.chan = dac_chan_old;
+
+
+	tandy.chan->LoadState(stream);
+	tandy.dac.chan->LoadState(stream);
 }

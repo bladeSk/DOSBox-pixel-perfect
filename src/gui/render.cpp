@@ -31,12 +31,14 @@
 #include "hardware.h"
 #include "support.h"
 
+#include "../save_state.h"
+
 #include "render_scalers.h"
 
 Render_t render;
 ScalerLineHandler_t RENDER_DrawLine;
 
-static void RENDER_CallBack( GFX_CallBackFunctions_t function );
+void RENDER_CallBack( GFX_CallBackFunctions_t function );
 
 static void Check_Palette(void) {
 	/* Clean up any previous changed palette data */
@@ -498,7 +500,7 @@ forcenormal:
 	render.active=true;
 }
 
-static void RENDER_CallBack( GFX_CallBackFunctions_t function ) {
+void RENDER_CallBack( GFX_CallBackFunctions_t function ) {
 	if (function == GFX_CallBackStop) {
 		RENDER_Halt( );	
 		return;
@@ -513,11 +515,17 @@ static void RENDER_CallBack( GFX_CallBackFunctions_t function ) {
 	}
 }
 
-void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double ratio,bool dblw,bool dblh) {
+void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double scrn_ratio,bool dblw,bool dblh) {
+
+	double ratio;
+
 	RENDER_Halt( );
 	if (!width || !height || width > SCALER_MAXWIDTH || height > SCALER_MAXHEIGHT) { 
 		return;	
 	}
+
+	ratio = scrn_ratio;
+
 	if ( ratio > 1 ) {
 		double target = height * ratio + 0.025;
 		ratio = target / height;
@@ -531,6 +539,9 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double ratio,bool 
 	render.src.dblh=dblh;
 	render.src.fps=fps;
 	render.src.ratio=ratio;
+
+	render.src.scrn_ratio=scrn_ratio;
+
 	RENDER_Reset( );
 }
 
@@ -631,3 +642,53 @@ void RENDER_Init(Section * sec) {
 	GFX_SetTitle(-1,render.frameskip.max,false);
 }
 
+//save state support
+namespace
+{
+class SerializeRender : public SerializeGlobalPOD
+{
+public:
+	SerializeRender() : SerializeGlobalPOD("Render")
+	{}
+
+private:
+	virtual void getBytes(std::ostream& stream)
+	{
+		SerializeGlobalPOD::getBytes(stream);
+
+
+		// - pure data
+		WRITE_POD( &render.src, render.src );
+
+		WRITE_POD( &render.pal, render.pal );
+		WRITE_POD( &render.updating, render.updating );
+		WRITE_POD( &render.active, render.active );
+		WRITE_POD( &render.fullFrame, render.fullFrame );
+	}
+
+	virtual void setBytes(std::istream& stream)
+	{
+		SerializeGlobalPOD::setBytes(stream);
+
+
+		// - pure data
+		READ_POD( &render.src, render.src );
+
+		READ_POD( &render.pal, render.pal );
+		READ_POD( &render.updating, render.updating );
+		READ_POD( &render.active, render.active );
+		READ_POD( &render.fullFrame, render.fullFrame );
+
+		//***************************************
+		//***************************************
+
+		// reset screen
+		memset( &render.frameskip, 0, sizeof(render.frameskip) );
+
+		render.scale.clearCache = true;
+		if( render.scale.outWrite ) { GFX_EndUpdate(NULL); }
+
+		RENDER_SetSize( render.src.width, render.src.height, render.src.bpp, render.src.fps, render.src.scrn_ratio, render.src.dblw, render.src.dblh );
+	}
+} dummy;
+}

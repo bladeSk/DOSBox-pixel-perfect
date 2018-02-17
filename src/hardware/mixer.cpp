@@ -9,7 +9,7 @@
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Library General Public License for more details.
+ *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -48,6 +48,8 @@
 #include "hardware.h"
 #include "programs.h"
 #include "midi.h"
+
+#include "../save_state.h"
 
 #define MIXER_SSIZE 4
 
@@ -169,6 +171,8 @@ void MixerChannel::Mix(Bitu _needed) {
 	needed=_needed;
 	while (enabled && needed>done) {
 		Bitu left = (needed - done);
+		left *= freq_add;
+		left  = (left >> FREQ_SHIFT) + ((left & FREQ_MASK)!=0);
 		handler(left);
 	}
 }
@@ -299,21 +303,22 @@ inline void MixerChannel::AddSamples(Bitu len, const Type* data) {
 }
 
 void MixerChannel::AddStretched(Bitu len,Bit16s * data) {
-	if (done>=needed) {
+	if (done >= needed) {
 		LOG_MSG("Can't add, buffer full");
 		return;
 	}
 	//Target samples this inputs gets stretched into
-	Bitu outlen=needed-done;
+	Bitu outlen = needed - done;
 	Bitu index = 0;
 	Bitu index_add = (len << FREQ_SHIFT)/outlen;
-	Bitu mixpos=mixer.pos+done;
-	done=needed;
-	Bitu pos=0;
+	Bitu mixpos = mixer.pos + done;
+	done = needed;
+	Bitu pos = 0;
 
 	while (outlen--) {
 		Bitu new_pos = index >> FREQ_SHIFT;
 		if (pos != new_pos) {
+			pos = new_pos;
 			//Forward the previous sample
 			prevSample[0] = data[0];
 			data++;
@@ -322,9 +327,9 @@ void MixerChannel::AddStretched(Bitu len,Bit16s * data) {
 		Bits diff_mul = index & FREQ_MASK;
 		index += index_add;
 		mixpos &= MIXER_BUFMASK;
-		Bits sample = prevSample[0]+((diff*diff_mul) >> FREQ_SHIFT);
-		mixer.work[mixpos][0]+=sample*volmul[0];
-		mixer.work[mixpos][1]+=sample*volmul[1];
+		Bits sample = prevSample[0] + ((diff * diff_mul) >> FREQ_SHIFT);
+		mixer.work[mixpos][0] += sample * volmul[0];
+		mixer.work[mixpos][1] += sample * volmul[1];
 		mixpos++;
 	}
 }
@@ -702,4 +707,109 @@ void MIXER_Init(Section* sec) {
 	mixer.max_needed=mixer.blocksize * 2 + 2*mixer.min_needed;
 	mixer.needed=mixer.min_needed+1;
 	PROGRAMS_MakeFile("MIXER.COM",MIXER_ProgramStart);
+}
+
+// save state support
+void *MIXER_Mix_NoSound_PIC_Timer = (void*)MIXER_Mix_NoSound;
+void *MIXER_Mix_PIC_Timer = (void*)MIXER_Mix;
+
+
+void MixerChannel::SaveState( std::ostream& stream )
+{
+	// - pure data
+	WRITE_POD( &volmain, volmain );
+	WRITE_POD( &scale, scale );
+	WRITE_POD( &volmul, volmul );
+	WRITE_POD( &freq_add, freq_add );
+	WRITE_POD( &enabled, enabled );
+}
+
+
+void MixerChannel::LoadState( std::istream& stream )
+{
+	// - pure data
+	READ_POD( &volmain, volmain );
+	READ_POD( &scale, scale );
+	READ_POD( &volmul, volmul );
+	READ_POD( &freq_add, freq_add );
+	READ_POD( &enabled, enabled );
+
+	//********************************************
+	//********************************************
+	//********************************************
+
+	// reset mixer channel (system data)
+	done = 0;
+	needed = 0;
+}
+
+extern void POD_Save_Adlib(std::ostream& stream);
+extern void POD_Save_Disney(std::ostream& stream);
+extern void POD_Save_Gameblaster(std::ostream& stream);
+extern void POD_Save_GUS(std::ostream& stream);
+extern void POD_Save_MPU401(std::ostream& stream);
+extern void POD_Save_PCSpeaker(std::ostream& stream);
+extern void POD_Save_Sblaster(std::ostream& stream);
+extern void POD_Save_Tandy_Sound(std::ostream& stream);
+extern void POD_Load_Adlib(std::istream& stream);
+extern void POD_Load_Disney(std::istream& stream);
+extern void POD_Load_Gameblaster(std::istream& stream);
+extern void POD_Load_GUS(std::istream& stream);
+extern void POD_Load_MPU401(std::istream& stream);
+extern void POD_Load_PCSpeaker(std::istream& stream);
+extern void POD_Load_Sblaster(std::istream& stream);
+extern void POD_Load_Tandy_Sound(std::istream& stream);
+
+namespace
+{
+class SerializeMixer : public SerializeGlobalPOD
+{
+public:
+	SerializeMixer() : SerializeGlobalPOD("Mixer")
+	{}
+
+private:
+	virtual void getBytes(std::ostream& stream)
+	{
+
+		//*************************************************
+		//*************************************************
+
+		SerializeGlobalPOD::getBytes(stream);
+
+
+		POD_Save_Adlib(stream);
+		POD_Save_Disney(stream);
+		POD_Save_Gameblaster(stream);
+		POD_Save_GUS(stream);
+		POD_Save_MPU401(stream);
+		POD_Save_PCSpeaker(stream);
+		POD_Save_Sblaster(stream);
+		POD_Save_Tandy_Sound(stream);
+	}
+
+	virtual void setBytes(std::istream& stream)
+	{
+
+		//*************************************************
+		//*************************************************
+
+		SerializeGlobalPOD::setBytes(stream);
+
+
+		POD_Load_Adlib(stream);
+		POD_Load_Disney(stream);
+		POD_Load_Gameblaster(stream);
+		POD_Load_GUS(stream);
+		POD_Load_MPU401(stream);
+		POD_Load_PCSpeaker(stream);
+		POD_Load_Sblaster(stream);
+		POD_Load_Tandy_Sound(stream);
+
+		// reset mixer channel (system data)
+		mixer.needed = 0;
+		mixer.done = 0;
+	}
+
+} dummy;
 }

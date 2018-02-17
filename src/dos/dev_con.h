@@ -34,6 +34,9 @@ public:
 	Bit16u GetInformation(void);
 	bool ReadFromControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
 	bool WriteToControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode){return false;}
+
+	virtual void SaveState( std::ostream& stream );
+	virtual void LoadState( std::istream& stream );
 private:
 	Bit8u readcache;
 	Bit8u lastwrite;
@@ -68,7 +71,7 @@ bool device_CON::Read(Bit8u * data,Bit16u * size) {
 			if (*size>count) data[count++]=0x0A;    // it's only expanded if there is room for it. (NO cache)
 			*size=count;
 			reg_ax=oldax;
-			if(dos.echo) { 
+			if(dos.echo) {
 				INT10_TeletypeOutput(13,7); //maybe don't do this ( no need for it actually ) (but it's compatible)
 				INT10_TeletypeOutput(10,7);
 			}
@@ -137,7 +140,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				} while(col%8);
 				lastwrite = data[count++];
 				continue;
-			} else { 
+			} else {
 				/* Some sort of "hack" now that '\n' doesn't set col to 0 (int10_char.cpp old chessgame) */
 				if((data[count] == '\n') && (lastwrite != '\r')) {
 					INT10_TeletypeOutputAttr('\r',ansi.enabled?ansi.attr:7,true);
@@ -150,15 +153,15 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 	}
 
 	if(!ansi.sci){
-            
+
 		switch(data[count]){
-		case '[': 
+		case '[':
 			ansi.sci=true;
 			break;
 		case '7': /* save cursor pos + attr */
 		case '8': /* restore this  (Wonder if this is actually used) */
 		case 'D':/* scrolling DOWN*/
-		case 'M':/* scrolling UP*/ 
+		case 'M':/* scrolling UP*/
 		default:
 			LOG(LOG_IOCTL,LOG_NORMAL)("ANSI: unknown char %c after a esc",data[count]); /*prob () */
 			ClearAnsi();
@@ -186,7 +189,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 			ansi.numberofarg++;
 			break;
 		case 'm':               /* SGR */
-			for(i=0;i<=ansi.numberofarg;i++){ 
+			for(i=0;i<=ansi.numberofarg;i++){
 				ansi.enabled=true;
 				switch(ansi.data[i]){
 				case 0: /* normal */
@@ -264,7 +267,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 				case 46:
 					ansi.attr&=0x8f;
 					ansi.attr|=0x30;
-					break;	
+					break;
 				case 47:
 					ansi.attr&=0x8f;
 					ansi.attr|=0x70;
@@ -296,7 +299,7 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 			col=CURSOR_POS_COL(page) ;
 			row=CURSOR_POS_ROW(page) ;
 			tempdata = (ansi.data[0]? ansi.data[0] : 1);
-			if(tempdata > row) { row=0; } 
+			if(tempdata > row) { row=0; }
 			else { row-=tempdata;}
 			INT10_SetCursorPos(row,col,page);
 			ClearAnsi();
@@ -317,8 +320,8 @@ bool device_CON::Write(Bit8u * data,Bit16u * size) {
 			row=CURSOR_POS_ROW(page);
 			ncols = real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 			tempdata=(ansi.data[0]? ansi.data[0] : 1);
-			if(tempdata + static_cast<Bitu>(col) >= ncols) 
-				{ col = ncols - 1;} 
+			if(tempdata + static_cast<Bitu>(col) >= ncols)
+				{ col = ncols - 1;}
 			else	{ col += tempdata;}
 			INT10_SetCursorPos(row,col,page);
 			ClearAnsi();
@@ -428,4 +431,24 @@ void device_CON::ClearAnsi(void){
 	ansi.esc=false;
 	ansi.sci=false;
 	ansi.numberofarg=0;
+}
+
+// save state support
+void device_CON::SaveState( std::ostream& stream )
+{
+	// - pure data
+	WRITE_POD( &readcache, readcache );
+	WRITE_POD( &lastwrite, lastwrite );
+
+	WRITE_POD( &ansi, ansi );
+}
+
+
+void device_CON::LoadState( std::istream& stream )
+{
+	// - pure data
+	READ_POD( &readcache, readcache );
+	READ_POD( &lastwrite, lastwrite );
+
+	READ_POD( &ansi, ansi );
 }

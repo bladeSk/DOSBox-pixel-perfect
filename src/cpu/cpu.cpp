@@ -23,6 +23,9 @@
 #include "dosbox.h"
 #include "cpu.h"
 #include "memory.h"
+
+#include "../save_state.h"
+
 #include "debug.h"
 #include "mapper.h"
 #include "setup.h"
@@ -75,25 +78,27 @@ void CPU_Core_Simple_Init(void);
 void CPU_Core_Dyn_X86_Init(void);
 void CPU_Core_Dyn_X86_Cache_Init(bool enable_cache);
 void CPU_Core_Dyn_X86_Cache_Close(void);
+void CPU_Core_Dyn_X86_Cache_Reset(void);
 void CPU_Core_Dyn_X86_SetFPUMode(bool dh_fpu);
 #elif (C_DYNREC)
 void CPU_Core_Dynrec_Init(void);
 void CPU_Core_Dynrec_Cache_Init(bool enable_cache);
 void CPU_Core_Dynrec_Cache_Close(void);
+void CPU_Core_Dynrec_Cache_Reset(void);
 #endif
 
-/* In debug mode exceptions are tested and dosbox exits when 
- * a unhandled exception state is detected. 
+/* In debug mode exceptions are tested and dosbox exits when
+ * a unhandled exception state is detected.
  * USE CHECK_EXCEPT to raise an exception in that case to see if that exception
  * solves the problem.
- * 
+ *
  * In non-debug mode dosbox doesn't do detection (and hence doesn't crash at
  * that point). (game might crash later due to the unhandled exception) */
 
 #if C_DEBUG
 // #define CPU_CHECK_EXCEPT 1
 // #define CPU_CHECK_IGNORE 1
- /* Use CHECK_EXCEPT when something doesn't work to see if a exception is 
+ /* Use CHECK_EXCEPT when something doesn't work to see if a exception is
  * needed that isn't enabled by default.*/
 #else
 /* NORMAL NO CHECKING => More Speed */
@@ -221,7 +226,7 @@ bool CPU_PUSHF(Bitu use32) {
 		return CPU_PrepareException(EXCEPTION_GP,0);
 	}
 	FillFlags();
-	if (use32) 
+	if (use32)
 		CPU_Push32(reg_flags & 0xfcffff);
 	else CPU_Push16(reg_flags);
 	return false;
@@ -327,6 +332,10 @@ public:
 		is386=desc.Is386();
 		return true;
 	}
+
+	void SaveState( std::ostream& stream );
+	void LoadState( std::istream& stream );
+
 	TSS_Descriptor desc;
 	Bitu selector;
 	PhysPt base;
@@ -344,7 +353,7 @@ enum TSwitchType {
 bool CPU_SwitchTask(Bitu new_tss_selector,TSwitchType tstype,Bitu old_eip) {
 	FillFlags();
 	TaskStateSegment new_tss;
-	if (!new_tss.SetSelector(new_tss_selector)) 
+	if (!new_tss.SetSelector(new_tss_selector))
 		E_Exit("Illegal TSS for switch, selector=%x, switchtype=%x",new_tss_selector,tstype);
 	if (tstype==TSwitch_IRET) {
 		if (!new_tss.desc.IsBusy())
@@ -448,7 +457,7 @@ bool CPU_SwitchTask(Bitu new_tss_selector,TSwitchType tstype,Bitu old_eip) {
 		new_fs = SegValue(fs);
 		new_gs = SegValue(gs);
 	} else {
-	
+
 		/* Setup the new cr3 */
 		PAGING_SetDirBase(new_cr3);
 
@@ -584,7 +593,7 @@ void CPU_Interrupt(Bitu num,Bitu type,Bitu oldeip) {
 				CPU_Exception(EXCEPTION_GP,0);
 				return;
 			}
-		} 
+		}
 
 		Descriptor gate;
 		if (!cpu.idt.GetDescriptor(num<<3,gate)) {
@@ -694,7 +703,7 @@ void CPU_Interrupt(Bitu num,Bitu type,Bitu oldeip) {
 						}
 //						LOG_MSG("INT:Gate to inner level SS:%X SP:%X",n_ss,n_esp);
 						goto do_interrupt;
-					} 
+					}
 					if (cs_dpl!=cpu.cpl)
 						E_Exit("Non-conforming intra privilege INT with DPL!=CPL");
 				case DESC_CODE_N_C_A:	case DESC_CODE_N_C_NA:
@@ -719,7 +728,7 @@ do_interrupt:
 						CPU_Push16(oldeip);
 						if (type & CPU_INT_HAS_ERROR) CPU_Push16(cpu.exception.error);
 					}
-					break;		
+					break;
 				default:
 					E_Exit("INT:Gate Selector points to illegal descriptor with type %x",cs_desc.Type());
 				}
@@ -810,7 +819,7 @@ void CPU_IRET(bool use32,Bitu oldeip) {
 				return;
 			}
 		}
-		/* Check if this is task IRET */	
+		/* Check if this is task IRET */
 		if (GETFLAG(NT)) {
 			if (GETFLAG(VM)) E_Exit("Pmode IRET with VM bit set");
 			CPU_CHECK_COND(!cpu_tss.IsValid(),
@@ -857,7 +866,7 @@ void CPU_IRET(bool use32,Bitu oldeip) {
 				reg_esp=n_esp;
 				cpu.code.big=false;
 				SegSet16(cs,n_cs_sel);
-				LOG(LOG_CPU,LOG_NORMAL)("IRET:Back to V86: CS:%X IP %X SS:%X SP %X FLAGS:%X",SegValue(cs),reg_eip,SegValue(ss),reg_esp,reg_flags);	
+				LOG(LOG_CPU,LOG_NORMAL)("IRET:Back to V86: CS:%X IP %X SS:%X SP %X FLAGS:%X",SegValue(cs),reg_eip,SegValue(ss),reg_esp,reg_flags);
 				return;
 			}
 			if (n_flags & FLAG_VM) E_Exit("IRET from pmode to v86 with CPL!=0");
@@ -904,7 +913,7 @@ void CPU_IRET(bool use32,Bitu oldeip) {
 			"IRET with nonpresent code segment",
 			EXCEPTION_NP,n_cs_sel & 0xfffc)
 
-		if (n_cs_rpl==cpu.cpl) {	
+		if (n_cs_rpl==cpu.cpl) {
 			/* Return to same level */
 
 			// commit point
@@ -1096,7 +1105,7 @@ void CPU_CALL(bool use32,Bitu selector,Bitu offset,Bitu oldeip) {
 				"CALL:CODE:NC:DPL!=CPL",
 				EXCEPTION_GP,selector & 0xfffc)
 			LOG(LOG_CPU,LOG_NORMAL)("CALL:CODE:NC to %X:%X",selector,offset);
-			goto call_code;	
+			goto call_code;
 		case DESC_CODE_N_C_A:case DESC_CODE_N_C_NA:
 		case DESC_CODE_R_C_A:case DESC_CODE_R_C_NA:
 			CPU_CHECK_COND(call.DPL()>cpu.cpl,
@@ -1123,7 +1132,7 @@ call_code:
 			cpu.code.big=call.Big()>0;
 			Segs.val[cs]=(selector & 0xfffc) | cpu.cpl;
 			return;
-		case DESC_386_CALL_GATE: 
+		case DESC_386_CALL_GATE:
 		case DESC_286_CALL_GATE:
 			{
 				CPU_CHECK_COND(call.DPL()<cpu.cpl,
@@ -1194,7 +1203,7 @@ call_code:
 						// catch pagefaults
 						if (call.saved.gate.paramcount&31) {
 							if (call.Type()==DESC_386_CALL_GATE) {
-								for (Bits i=(call.saved.gate.paramcount&31)-1;i>=0;i--) 
+								for (Bits i=(call.saved.gate.paramcount&31)-1;i>=0;i--)
 									mem_readd(o_stack+i*4);
 							} else {
 								for (Bits i=(call.saved.gate.paramcount&31)-1;i>=0;i--)
@@ -1230,7 +1239,7 @@ call_code:
 							CPU_Push32(o_ss);		//save old stack
 							CPU_Push32(o_esp);
 							if (call.saved.gate.paramcount&31)
-								for (Bits i=(call.saved.gate.paramcount&31)-1;i>=0;i--) 
+								for (Bits i=(call.saved.gate.paramcount&31)-1;i>=0;i--)
 									CPU_Push32(mem_readd(o_stack+i*4));
 							CPU_Push32(oldcs);
 							CPU_Push32(oldeip);
@@ -1244,7 +1253,7 @@ call_code:
 							CPU_Push16(oldeip);
 						}
 
-						break;		
+						break;
 					} else if (n_cs_dpl > cpu.cpl)
 						E_Exit("CALL:GATE:CS DPL>CPL");		// or #GP(sel)
 				case DESC_CODE_N_C_A:case DESC_CODE_N_C_NA:
@@ -1333,7 +1342,7 @@ void CPU_RET(bool use32,Bitu bytes,Bitu oldeip) {
 			"RET:CS beyond limits",
 			EXCEPTION_GP,selector & 0xfffc)
 
-		if (cpu.cpl==rpl) {	
+		if (cpu.cpl==rpl) {
 			/* Return to same level */
 			switch (desc.Type()) {
 			case DESC_CODE_N_NC_A:case DESC_CODE_N_NC_NA:
@@ -1509,7 +1518,7 @@ bool CPU_LTR(Bitu selector) {
 		cpu_tss.desc.SetBusy(true);
 		cpu_tss.SaveSelector();
 	} else {
-		/* Descriptor was no available TSS descriptor */ 
+		/* Descriptor was no available TSS descriptor */
 		LOG(LOG_CPU,LOG_NORMAL)("LTR failed, selector=%X (type=%X)",selector,desc.Type());
 		return CPU_PrepareException(EXCEPTION_GP,selector);
 	}
@@ -1735,7 +1744,7 @@ Bitu CPU_SMSW(void) {
 bool CPU_LMSW(Bitu word) {
 	if (cpu.pmode && (cpu.cpl>0)) return CPU_PrepareException(EXCEPTION_GP,0);
 	word&=0xf;
-	if (cpu.cr0 & 1) word|=1; 
+	if (cpu.cr0 & 1) word|=1;
 	word|=(cpu.cr0&0xfffffff0);
 	CPU_SET_CRX(0,word);
 	return false;
@@ -1749,9 +1758,9 @@ void CPU_ARPL(Bitu & dest_sel,Bitu src_sel) {
 		SETFLAGBIT(ZF,true);
 	} else {
 		SETFLAGBIT(ZF,false);
-	} 
+	}
 }
-	
+
 void CPU_LAR(Bitu selector,Bitu & ar) {
 	FillFlags();
 	if (selector == 0) {
@@ -1782,7 +1791,7 @@ void CPU_LAR(Bitu selector,Bitu & ar) {
 
 	case DESC_386_TSS_A:		case DESC_386_TSS_B:
 	case DESC_386_CALL_GATE:
-	
+
 
 	case DESC_DATA_EU_RO_NA:	case DESC_DATA_EU_RO_A:
 	case DESC_DATA_EU_RW_NA:	case DESC_DATA_EU_RW_A:
@@ -1823,7 +1832,7 @@ void CPU_LSL(Bitu selector,Bitu & limit) {
 	case DESC_LDT:
 	case DESC_286_TSS_A:
 	case DESC_286_TSS_B:
-	
+
 	case DESC_386_TSS_A:
 	case DESC_386_TSS_B:
 
@@ -1831,7 +1840,7 @@ void CPU_LSL(Bitu selector,Bitu & limit) {
 	case DESC_DATA_EU_RW_NA:	case DESC_DATA_EU_RW_A:
 	case DESC_DATA_ED_RO_NA:	case DESC_DATA_ED_RO_A:
 	case DESC_DATA_ED_RW_NA:	case DESC_DATA_ED_RW_A:
-	
+
 	case DESC_CODE_N_NC_A:		case DESC_CODE_N_NC_NA:
 	case DESC_CODE_R_NC_A:		case DESC_CODE_R_NC_NA:
 		if (desc.DPL()<cpu.cpl || desc.DPL() < rpl) {
@@ -1859,8 +1868,8 @@ void CPU_VERR(Bitu selector) {
 		return;
 	}
 	switch (desc.Type()){
-	case DESC_CODE_R_C_A:		case DESC_CODE_R_C_NA:	
-		//Conforming readable code segments can be always read 
+	case DESC_CODE_R_C_A:		case DESC_CODE_R_C_NA:
+		//Conforming readable code segments can be always read
 		break;
 	case DESC_DATA_EU_RO_NA:	case DESC_DATA_EU_RO_A:
 	case DESC_DATA_EU_RW_NA:	case DESC_DATA_EU_RW_A:
@@ -2012,10 +2021,10 @@ bool CPU_CPUID(void) {
 	if (CPU_ArchitectureType<CPU_ARCHTYPE_486NEWSLOW) return false;
 	switch (reg_eax) {
 	case 0:	/* Vendor ID String and maximum level? */
-		reg_eax=1;  /* Maximum level */ 
-		reg_ebx='G' | ('e' << 8) | ('n' << 16) | ('u'<< 24); 
-		reg_edx='i' | ('n' << 8) | ('e' << 16) | ('I'<< 24); 
-		reg_ecx='n' | ('t' << 8) | ('e' << 16) | ('l'<< 24); 
+		reg_eax=1;  /* Maximum level */
+		reg_ebx='G' | ('e' << 8) | ('n' << 16) | ('u'<< 24);
+		reg_edx='i' | ('n' << 8) | ('e' << 16) | ('I'<< 24);
+		reg_ecx='n' | ('t' << 8) | ('e' << 16) | ('l'<< 24);
 		break;
 	case 1:	/* get processor type/family/model/stepping and feature flags */
 		if ((CPU_ArchitectureType==CPU_ARCHTYPE_486NEWSLOW) ||
@@ -2074,7 +2083,7 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
 		mem_writew(SegPhys(ss)+sp_index,reg_bp);
 		reg_bp=(Bit16u)(reg_esp-2);
 		if (level) {
-			for (Bitu i=1;i<level;i++) {	
+			for (Bitu i=1;i<level;i++) {
 				sp_index-=2;bp_index-=2;
 				mem_writew(SegPhys(ss)+sp_index,mem_readw(SegPhys(ss)+bp_index));
 			}
@@ -2086,7 +2095,7 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
         mem_writed(SegPhys(ss)+sp_index,reg_ebp);
 		reg_ebp=(reg_esp-4);
 		if (level) {
-			for (Bitu i=1;i<level;i++) {	
+			for (Bitu i=1;i<level;i++) {
 				sp_index-=4;bp_index-=4;
 				mem_writed(SegPhys(ss)+sp_index,mem_readd(SegPhys(ss)+bp_index));
 			}
@@ -2112,10 +2121,10 @@ static void CPU_CycleIncrease(bool pressed) {
 		} else {
 			CPU_CycleMax = (Bit32s)(CPU_CycleMax + CPU_CycleUp);
 		}
-	    
+
 		CPU_CycleLeft=0;CPU_Cycles=0;
 		if (CPU_CycleMax==old_cycles) CPU_CycleMax++;
-		if(CPU_CycleMax > 15000 ) 
+		if(CPU_CycleMax > 15000 )
 			LOG_MSG("CPU speed: fixed %d cycles. If you need more than 20000, try core=dynamic in DOSBox's options.",CPU_CycleMax);
 		else
 			LOG_MSG("CPU speed: fixed %d cycles.",CPU_CycleMax);
@@ -2188,14 +2197,14 @@ public:
 		reg_esi=0;
 		reg_ebp=0;
 		reg_esp=0;
-	
+
 		SegSet16(cs,0);
 		SegSet16(ds,0);
 		SegSet16(es,0);
 		SegSet16(fs,0);
 		SegSet16(gs,0);
 		SegSet16(ss,0);
-	
+
 		CPU_SetFlags(FLAG_IF,FMASK_ALL);		//Enable interrupts
 		cpu.cr0=0xffffffff;
 		CPU_SET_CRX(0,0);						//Initialize
@@ -2229,7 +2238,7 @@ public:
 #endif
 		MAPPER_AddHandler(CPU_CycleDecrease,MK_f11,MMOD1,"cycledown","Dec Cycles");
 		MAPPER_AddHandler(CPU_CycleIncrease,MK_f12,MMOD1,"cycleup"  ,"Inc Cycles");
-		Change_Config(configuration);	
+		Change_Config(configuration);
 		CPU_JMP(false,0,0,0);					//Setup the first cpu core
 	}
 	bool Change_Config(Section* newconfig){
@@ -2400,11 +2409,15 @@ public:
 		if(CPU_CycleDown <= 0) CPU_CycleDown = 20;
 		if (CPU_CycleAutoAdjust) GFX_SetTitle(CPU_CyclePercUsed,-1,false);
 		else GFX_SetTitle(CPU_CycleMax,-1,false);
+
+		// savestate support
+		cpu.hlt.old_decoder=cpudecoder;
+
 		return true;
 	}
 	~CPU(){ /* empty */};
 };
-	
+
 static CPU * test;
 
 void CPU_ShutDown(Section* sec) {
@@ -2422,3 +2435,314 @@ void CPU_Init(Section* sec) {
 }
 //initialize static members
 bool CPU::inited=false;
+
+//save state support
+void DescriptorTable::SaveState( std::ostream& stream )
+{
+	WRITE_POD( &table_base, table_base );
+	WRITE_POD( &table_limit, table_limit );
+}
+
+
+void DescriptorTable::LoadState( std::istream& stream )
+{
+	READ_POD( &table_base, table_base );
+	READ_POD( &table_limit, table_limit );
+}
+
+
+void GDTDescriptorTable::SaveState(std::ostream& stream)
+{
+	this->DescriptorTable::SaveState(stream);
+
+
+	WRITE_POD( &ldt_base, ldt_base );
+	WRITE_POD( &ldt_limit, ldt_limit );
+	WRITE_POD( &ldt_value, ldt_value );
+}
+
+
+void GDTDescriptorTable::LoadState(std::istream& stream)
+{
+	this->DescriptorTable::LoadState(stream);
+
+
+	READ_POD( &ldt_base, ldt_base );
+	READ_POD( &ldt_limit, ldt_limit );
+	READ_POD( &ldt_value, ldt_value );
+}
+
+
+void TaskStateSegment::SaveState( std::ostream& stream )
+{
+	WRITE_POD( &desc.saved, desc.saved );
+	WRITE_POD( &selector, selector );
+	WRITE_POD( &base, base );
+	WRITE_POD( &limit, limit );
+	WRITE_POD( &is386, is386 );
+	WRITE_POD( &valid, valid );
+}
+
+
+void TaskStateSegment::LoadState( std::istream& stream )
+{
+	READ_POD( &desc.saved, desc.saved );
+	READ_POD( &selector, selector );
+	READ_POD( &base, base );
+	READ_POD( &limit, limit );
+	READ_POD( &is386, is386 );
+	READ_POD( &valid, valid );
+}
+
+
+Bit16u CPU_FindDecoderType( CPU_Decoder *decoder )
+{
+	Bit16u decoder_idx;
+
+	decoder_idx = 0xffff;
+
+
+	if(0) {}
+	else if( cpudecoder == &CPU_Core_Normal_Run ) decoder_idx = 0;
+	else if( cpudecoder == &CPU_Core_Prefetch_Run ) decoder_idx = 1;
+	else if( cpudecoder == &CPU_Core_Simple_Run ) decoder_idx = 2;
+	else if( cpudecoder == &CPU_Core_Full_Run ) decoder_idx = 3;
+	else if( cpudecoder == &CPU_Core_Normal_Trap_Run ) decoder_idx = 100;
+#if (C_DYNAMIC_X86)
+else if( cpudecoder == &CPU_Core_Dyn_X86_Run ) decoder_idx = 4;
+#endif
+#if (C_DYNREC)
+else if( cpudecoder == &CPU_Core_Dynrec_Run ) decoder_idx = 5;
+#endif
+
+else if( cpudecoder == &CPU_Core_Normal_Trap_Run ) decoder_idx = 100;
+#if (C_DYNAMIC_X86)
+else if( cpudecoder == &CPU_Core_Dyn_X86_Trap_Run ) decoder_idx = 101;
+#endif
+#if(C_DYNREC)
+else if( cpudecoder == &CPU_Core_Dynrec_Trap_Run ) decoder_idx = 102;
+#endif
+
+else if( cpudecoder == &HLT_Decode ) decoder_idx = 200;
+
+
+return decoder_idx;
+}
+
+
+CPU_Decoder *CPU_IndexDecoderType( Bit16u decoder_idx )
+{
+CPU_Decoder *cpudecoder;
+
+
+cpudecoder = 0;
+switch( decoder_idx ) {
+    case 0: cpudecoder = &CPU_Core_Normal_Run; break;
+    case 1: cpudecoder = &CPU_Core_Prefetch_Run; break;
+    case 2: cpudecoder = &CPU_Core_Simple_Run; break;
+    case 3: cpudecoder = &CPU_Core_Full_Run; break;
+#if (C_DYNAMIC_X86)
+    case 4: cpudecoder = &CPU_Core_Dyn_X86_Run; break;
+#endif
+#if (C_DYNREC)
+    case 5: cpudecoder = &CPU_Core_Dynrec_Run; break;
+#endif
+
+    case 100: cpudecoder = &CPU_Core_Normal_Trap_Run; break;
+#if (C_DYNAMIC_X86)
+    case 101: cpudecoder = &CPU_Core_Dyn_X86_Trap_Run; break;
+#endif
+#if (C_DYNREC)
+    case 102: cpudecoder = &CPU_Core_Dynrec_Trap_Run; break;
+#endif
+
+    case 200: cpudecoder = &HLT_Decode; break;
+}
+
+
+return cpudecoder;
+}
+
+extern void POD_Save_CPU_Flags( std::ostream& stream );
+extern void POD_Save_CPU_Paging( std::ostream& stream );
+extern void POD_Load_CPU_Flags( std::istream& stream );
+extern void POD_Load_CPU_Paging( std::istream& stream );
+
+namespace
+{
+class SerializeCPU : public SerializeGlobalPOD
+{
+public:
+SerializeCPU() : SerializeGlobalPOD("CPU")
+{}
+
+private:
+virtual void getBytes(std::ostream& stream)
+{
+    Bit16u decoder_idx;
+
+    extern Bits PageFaultCore(void);
+    extern Bits IOFaultCore(void);
+
+
+
+    decoder_idx = CPU_FindDecoderType( cpudecoder );
+
+    //********************************************
+    //********************************************
+    //********************************************
+
+    SerializeGlobalPOD::getBytes(stream);
+
+
+    // - pure data
+    WRITE_POD( &cpu_regs, cpu_regs );
+
+    WRITE_POD( &cpu.cpl, cpu.cpl );
+    WRITE_POD( &cpu.mpl, cpu.mpl );
+    WRITE_POD( &cpu.cr0, cpu.cr0 );
+    WRITE_POD( &cpu.pmode, cpu.pmode );
+    cpu.gdt.SaveState(stream);
+    cpu.idt.SaveState(stream);
+    WRITE_POD( &cpu.stack, cpu.stack );
+    WRITE_POD( &cpu.code, cpu.code );
+    WRITE_POD( &cpu.hlt.cs, cpu.hlt.cs );
+    WRITE_POD( &cpu.hlt.eip, cpu.hlt.eip );
+    WRITE_POD( &cpu.exception, cpu.exception );
+    WRITE_POD( &cpu.direction, cpu.direction );
+    WRITE_POD( &cpu.trap_skip, cpu.trap_skip );
+    WRITE_POD( &cpu.drx, cpu.drx );
+    WRITE_POD( &cpu.trx, cpu.trx );
+
+    WRITE_POD( &Segs, Segs );
+    WRITE_POD( &CPU_Cycles, CPU_Cycles );
+    WRITE_POD( &CPU_CycleLeft, CPU_CycleLeft );
+    WRITE_POD( &CPU_IODelayRemoved, CPU_IODelayRemoved );
+    cpu_tss.SaveState(stream);
+    WRITE_POD( &lastint, lastint );
+
+    //********************************************
+    //********************************************
+    //********************************************
+
+    // - reloc func ptr
+    WRITE_POD( &decoder_idx, decoder_idx );
+
+    POD_Save_CPU_Flags(stream);
+	POD_Save_CPU_Paging(stream);
+}
+
+virtual void setBytes(std::istream& stream)
+{
+    Bit16u decoder_idx;
+    Bit16u decoder_old;
+
+
+
+
+
+    decoder_old = CPU_FindDecoderType( cpudecoder );
+
+    //********************************************
+    //********************************************
+    //********************************************
+
+    SerializeGlobalPOD::setBytes(stream);
+
+
+    // - pure data
+    READ_POD( &cpu_regs, cpu_regs );
+
+    READ_POD( &cpu.cpl, cpu.cpl );
+    READ_POD( &cpu.mpl, cpu.mpl );
+    READ_POD( &cpu.cr0, cpu.cr0 );
+    READ_POD( &cpu.pmode, cpu.pmode );
+    cpu.gdt.LoadState(stream);
+    cpu.idt.LoadState(stream);
+    READ_POD( &cpu.stack, cpu.stack );
+    READ_POD( &cpu.code, cpu.code );
+    READ_POD( &cpu.hlt.cs, cpu.hlt.cs );
+    READ_POD( &cpu.hlt.eip, cpu.hlt.eip );
+    READ_POD( &cpu.exception, cpu.exception );
+    READ_POD( &cpu.direction, cpu.direction );
+    READ_POD( &cpu.trap_skip, cpu.trap_skip );
+    READ_POD( &cpu.drx, cpu.drx );
+    READ_POD( &cpu.trx, cpu.trx );
+
+    READ_POD( &Segs, Segs );
+    READ_POD( &CPU_Cycles, CPU_Cycles );
+    READ_POD( &CPU_CycleLeft, CPU_CycleLeft );
+    READ_POD( &CPU_IODelayRemoved, CPU_IODelayRemoved );
+    cpu_tss.LoadState(stream);
+    READ_POD( &lastint, lastint );
+
+    //********************************************
+    //********************************************
+    //********************************************
+
+    // - reloc func ptr
+    READ_POD( &decoder_idx, decoder_idx );
+
+
+
+    POD_Load_CPU_Flags(stream);
+	POD_Load_CPU_Paging(stream);
+
+    //*******************************************
+    //*******************************************
+    //*******************************************
+
+    // switch to running core
+    if( decoder_idx < 100 ) {
+        switch( decoder_old ) {
+            // run -> run (0-99)
+
+            // trap -> run
+            case 100: cpudecoder = CPU_IndexDecoderType(0); break;
+            case 101: cpudecoder = CPU_IndexDecoderType(4); break;
+            case 102: cpudecoder = CPU_IndexDecoderType(5); break;
+
+            // hlt -> run
+            case 200: cpudecoder = cpu.hlt.old_decoder; break;
+        }
+    }
+
+    // switch to trap core
+    else if( decoder_idx < 200 ) {
+        switch( decoder_old ) {
+            // run -> trap
+            case 0:
+            case 1:
+            case 2:
+            case 3: cpudecoder = CPU_IndexDecoderType(100); break;
+            case 4: cpudecoder = CPU_IndexDecoderType(101); break;
+            case 5: cpudecoder = CPU_IndexDecoderType(102); break;
+
+            // trap -> trap (100-199)
+
+            // hlt -> trap
+            case 200: {
+                switch( CPU_FindDecoderType(cpu.hlt.old_decoder) ) {
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3: cpudecoder = CPU_IndexDecoderType(100); break;
+                    case 4: cpudecoder = CPU_IndexDecoderType(101); break;
+                    case 5: cpudecoder = CPU_IndexDecoderType(102); break;
+                }
+            }
+        }
+    }
+
+    // switch to hlt core
+    else if( decoder_idx < 300 ) {
+        cpudecoder = CPU_IndexDecoderType(200);
+    }
+#if (C_DYNAMIC_X86)
+    CPU_Core_Dyn_X86_Cache_Reset();
+#elif (C_DYNREC)
+    CPU_Core_Dynrec_Cache_Reset();
+#endif
+}
+} dummy;
+}

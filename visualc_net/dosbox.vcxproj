@@ -138,6 +138,7 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\save_state.cpp" />
     <ClCompile Include="..\src\cpu\callback.cpp" />
     <ClCompile Include="..\src\cpu\core_dynrec.cpp" />
     <ClCompile Include="..\src\cpu\core_dyn_x86.cpp" />
@@ -292,6 +293,7 @@
     <ClInclude Include="..\include\timer.h" />
     <ClInclude Include="..\include\vga.h" />
     <ClInclude Include="..\include\video.h" />
+    <ClInclude Include="..\src\save_state.h" />
     <ClInclude Include="..\src\cpu\core_dynrec\cache.h" />
     <ClInclude Include="..\src\cpu\core_dynrec\decoder.h" />
     <ClInclude Include="..\src\cpu\core_dynrec\decoder_basic.h" />

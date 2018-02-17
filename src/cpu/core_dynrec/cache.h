@@ -372,11 +372,11 @@ public:
 		return 0;	// none found
 	}
 
-	HostPt GetHostReadPt(Bitu phys_page) { 
+	HostPt GetHostReadPt(Bitu phys_page) {
 		hostmem=old_pagehandler->GetHostReadPt(phys_page);
 		return hostmem;
 	}
-	HostPt GetHostWritePt(Bitu phys_page) { 
+	HostPt GetHostWritePt(Bitu phys_page) {
 		return GetHostReadPt( phys_page );
 	}
 public:
@@ -392,7 +392,7 @@ private:
 
 	Bitu active_blocks;		// the number of cache blocks in this page
 	Bitu active_count;		// delaying parameter to not immediately release a page
-	HostPt hostmem;	
+	HostPt hostmem;
 	Bitu phys_page;
 };
 
@@ -433,13 +433,13 @@ void CacheBlockDynRec::Clear(void) {
 				wherelink = &(*wherelink)->link[ind].next;
 			}
 			// now remove the link
-			if(*wherelink) 
+			if(*wherelink)
 				*wherelink = (*wherelink)->link[ind].next;
 			else {
 				LOG(LOG_CPU,LOG_ERROR)("Cache anomaly. please investigate");
 			}
 		}
-	} else 
+	} else
 		cache_addunusedblock(this);
 	if (crossblock) {
 		// clear out the crossblock (in the page before) as well
@@ -464,7 +464,7 @@ static CacheBlockDynRec * cache_openblock(void) {
 	// check for enough space in this block
 	Bitu size=block->cache.size;
 	CacheBlockDynRec * nextblock=block->cache.next;
-	if (block->page.handler) 
+	if (block->page.handler)
 		block->Clear();
 	// block size must be at least CACHE_MAXSIZE
 	while (size<CACHE_MAXSIZE) {
@@ -473,7 +473,7 @@ static CacheBlockDynRec * cache_openblock(void) {
 		// merge blocks
 		size+=nextblock->cache.size;
 		CacheBlockDynRec * tempblock=nextblock->cache.next;
-		if (nextblock->page.handler) 
+		if (nextblock->page.handler)
 			nextblock->Clear();
 		// block is free now
 		cache_addunusedblock(nextblock);
@@ -500,8 +500,8 @@ static void cache_closeblock(void) {
 	Bitu written=(Bitu)(cache.pos-block->cache.start);
 	if (written>block->cache.size) {
 		if (!block->cache.next) {
-			if (written>block->cache.size+CACHE_MAXSIZE) E_Exit("CacheBlock overrun 1 %d",written-block->cache.size);	
-		} else E_Exit("CacheBlock overrun 2 written %d size %d",written,block->cache.size);	
+			if (written>block->cache.size+CACHE_MAXSIZE) E_Exit("CacheBlock overrun 1 %d",written-block->cache.size);
+		} else E_Exit("CacheBlock overrun 2 written %d size %d",written,block->cache.size);
 	} else {
 		Bitu new_size;
 		Bitu left=block->cache.size-written;
@@ -558,7 +558,7 @@ static void dyn_run_code(void);
 /* Define temporary pagesize so the MPROTECT case and the regular case share as much code as possible */
 #if (C_HAVE_MPROTECT)
 #define PAGESIZE_TEMP PAGESIZE
-#else 
+#else
 #define PAGESIZE_TEMP 4096
 #endif
 
@@ -662,4 +662,76 @@ static void cache_close(void) {
 	cache_code = NULL;
 	cache_code_link_blocks = NULL;
 	cache_initialized = false; */
+}
+
+static void cache_reset(void) {
+	if (cache_initialized) {
+		for (;;) {
+			if (cache.used_pages) {
+				CodePageHandlerDynRec * cpage=cache.used_pages;
+				CodePageHandlerDynRec * npage=cache.used_pages->next;
+				cpage->ClearRelease();
+				delete cpage;
+				cache.used_pages=npage;
+			} else break;
+		}
+
+		if (cache_blocks == NULL) {
+			cache_blocks=(CacheBlockDynRec*)malloc(CACHE_BLOCKS*sizeof(CacheBlockDynRec));
+			if(!cache_blocks) E_Exit("Allocating cache_blocks has failed");
+		}
+		memset(cache_blocks,0,sizeof(CacheBlockDynRec)*CACHE_BLOCKS);
+		cache.block.free=&cache_blocks[0];
+		for (Bits i=0;i<CACHE_BLOCKS-1;i++) {
+			cache_blocks[i].link[0].to=(CacheBlockDynRec *)1;
+			cache_blocks[i].link[1].to=(CacheBlockDynRec *)1;
+			cache_blocks[i].cache.next=&cache_blocks[i+1];
+		}
+
+		if (cache_code_start_ptr==NULL) {
+#if defined (WIN32)
+			cache_code_start_ptr=(Bit8u*)VirtualAlloc(0,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,
+				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
+			if (!cache_code_start_ptr)
+				cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
+#else
+			cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
+#endif
+			if (!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
+
+			cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
+
+			cache_code_link_blocks=cache_code;
+			cache_code+=PAGESIZE_TEMP;
+
+#if (C_HAVE_MPROTECT)
+			if(mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC))
+				LOG_MSG("Setting excute permission on the code cache has failed!");
+#endif
+		}
+
+		CacheBlockDynRec * block=cache_getblock();
+		cache.block.first=block;
+		cache.block.active=block;
+		block->cache.start=&cache_code[0];
+		block->cache.size=CACHE_TOTAL;
+		block->cache.next=0;								//Last block in the list
+
+		/* Setup the default blocks for block linkage returns */
+		cache.pos=&cache_code_link_blocks[0];
+		link_blocks[0].cache.start=cache.pos;
+		dyn_return(BR_Link1,false);
+		cache.pos=&cache_code_link_blocks[32];
+		link_blocks[1].cache.start=cache.pos;
+		dyn_return(BR_Link2,false);
+		cache.free_pages=0;
+		cache.last_page=0;
+		cache.used_pages=0;
+		/* Setup the code pages */
+		for (Bitu i=0;i<CACHE_PAGES;i++) {
+			CodePageHandlerDynRec * newpage=new CodePageHandlerDynRec();
+			newpage->next=cache.free_pages;
+			cache.free_pages=newpage;
+		}
+	}
 }
