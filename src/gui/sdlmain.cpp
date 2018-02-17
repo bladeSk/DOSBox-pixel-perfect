@@ -2193,16 +2193,6 @@ void GFX_GetSize(int &width, int &height, bool &fullscreen) {
 	fullscreen = sdl.desktop.fullscreen;
 }
 
-bool Get_Custom_SaveDir(std::string& savedir) {
-	std::string custom_savedir;
-	if (control->cmdline->FindString("-savedir",custom_savedir,false)) {
-		savedir=custom_savedir;
-		return true;
-	} else {
-		return false;
-	}
-}
-
 // save state support
 void POD_Save_Sdlmain( std::ostream& stream )
 {

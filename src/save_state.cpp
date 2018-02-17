@@ -146,24 +146,15 @@ void SaveState::save(size_t slot) { //throw (Error)
 	bool create_memorysize=false;
 	extern const char* RunningProgram;
 	std::string path;
-	bool Get_Custom_SaveDir(std::string& savedir);
-	if(Get_Custom_SaveDir(path)) {
-		path+=CROSS_FILESPLIT;
-	} else {
-		extern std::string capturedir;
-		const size_t last_slash_idx = capturedir.find_last_of("\\/");
-		if (std::string::npos != last_slash_idx) {
-			path = capturedir.substr(0, last_slash_idx);
-		} else {
-			path = ".";
-		}
-		path+=CROSS_FILESPLIT;
-		path+="sstate_";
-        path += RunningProgram;
-        path += std::to_string(slot + 1);
-		Cross::CreateDir(path);
-		path+=CROSS_FILESPLIT;
-	}
+	extern std::string capturedir;
+    path += capturedir;
+    Cross::CreateDir(path);
+	path += CROSS_FILESPLIT;
+	path += "sstate_";
+    path += RunningProgram;
+    path += std::to_string(slot + 1);
+	Cross::CreateDir(path);
+	path+=CROSS_FILESPLIT;
 
 	std::string temp, save2;
 	temp=path;
@@ -249,23 +240,14 @@ void SaveState::load(size_t slot) const { //throw (Error)
 	bool read_title=false;
 	bool read_memorysize=false;
 	std::string path;
-	bool Get_Custom_SaveDir(std::string& savedir);
-	if(Get_Custom_SaveDir(path)) {
-		path+=CROSS_FILESPLIT;
-	} else {
-		extern std::string capturedir;
-		const size_t last_slash_idx = capturedir.find_last_of("\\/");
-		if (std::string::npos != last_slash_idx) {
-			path = capturedir.substr(0, last_slash_idx);
-		} else {
-			path = ".";
-		}
-		path += CROSS_FILESPLIT;
-        path += "sstate_";
-        path += RunningProgram;
-        path += std::to_string(slot + 1);
-		path += CROSS_FILESPLIT;
-	}
+	extern std::string capturedir;
+    path += capturedir;
+    path += CROSS_FILESPLIT;
+    path += "sstate_";
+    path += RunningProgram;
+    path += std::to_string(slot + 1);
+	path += CROSS_FILESPLIT;
+
 	std::string temp;
 	temp = path;
 	std::stringstream slotname;
