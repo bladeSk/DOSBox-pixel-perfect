@@ -1701,7 +1701,7 @@ void Config_Add_SDL() {
 	Pbool = sdl_sec->Add_bool("fulldouble",Property::Changeable::Always,false);
 	Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow DOSBox.");
 
-	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"original");
+	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"desktop");
 	Pstring->Set_help("What resolution to use for fullscreen: original, desktop or a fixed size (e.g. 1024x768).\n"
 	                  "  Using your monitor's native resolution with aspect=true might give the best results.\n"
 			  "  If you end up with small window on a large screen, try an output different from surface.");
@@ -1719,7 +1719,14 @@ void Config_Add_SDL() {
 		"ddraw",
 #endif
 		0 };
-	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"surface");
+
+	const char* defoutput;
+#if C_OPENGL
+	defoutput = "openglnb";
+#else
+	defoutput = "surface";
+#endif
+	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,defoutput);
 	Pstring->Set_help("What video system to use for output.");
 	Pstring->Set_values(outputs);
 
