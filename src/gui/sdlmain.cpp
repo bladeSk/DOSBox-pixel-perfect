@@ -27,7 +27,9 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <math.h>
 #ifdef WIN32
+#define NOMINMAX
 #include <signal.h>
 #include <process.h>
 #endif
@@ -506,7 +508,7 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
             sdl.clip.h = sdl.draw.height * scale;
         } else if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
             // using integer squares
-			double scale = min(floor(ratio_w + 0.001), floor(ratio_h + 0.001));
+			double scale = std::min(floor(ratio_w + 0.001), floor(ratio_h + 0.001));
 			sdl.clip.w = sdl.draw.width * scale;
 			sdl.clip.h = sdl.draw.height * scale;
 		} else if (ratio_w < ratio_h) {

@@ -1359,7 +1359,7 @@ void DOS_File::SaveState( std::ostream& stream )
 Bit32u DOS_File::PopState( std::istream& stream)
 {
 	Bit32u file_namelen, seek_pos;
-	char *file_name;
+	char file_name[4096];
 
 	//******************************************
 	//******************************************
@@ -1367,7 +1367,6 @@ Bit32u DOS_File::PopState( std::istream& stream)
 
 	// - pure data
 	READ_POD( &file_namelen, file_namelen );
-	file_name = (char*)alloca( file_namelen * sizeof(char) );
 	READ_POD_SIZE( file_name, file_namelen );
 
 	READ_POD( &flags, flags );
@@ -1426,7 +1425,7 @@ void POD_Save_DOS_Files( std::ostream& stream )
 
 	for( int lcv=0; lcv<DOS_FILES; lcv++ ) {
 		Bit8u file_valid;
-		char *file_name;
+		char file_name[4096];
 		Bit8u file_namelen, file_drive, file_flags;
 		
 
@@ -1455,7 +1454,6 @@ void POD_Save_DOS_Files( std::ostream& stream )
 		//**********************************************
 
 		file_namelen = strlen( Files[lcv]->name ) + 1;
-		file_name = (char *) alloca( file_namelen );
 		strcpy( file_name, Files[lcv]->name );
 		
 		file_drive = Files[lcv]->GetDrive();
@@ -1499,7 +1497,7 @@ void POD_Load_DOS_Files( std::istream& stream )
 
 	for( int lcv=0; lcv<DOS_FILES; lcv++ ) {
 		Bit8u file_valid;
-		char *file_name;
+		char file_name[4096];
 		Bit8u file_namelen, file_drive, file_flags;
 
 		// - reloc ptr
@@ -1539,7 +1537,6 @@ void POD_Load_DOS_Files( std::istream& stream )
 		// - Drives->FileOpen vars (repeat copy)
 
 		READ_POD( &file_namelen, file_namelen );
-		file_name = (char *) alloca( file_namelen );
 		READ_POD_SIZE( file_name, file_namelen );
 
 		READ_POD( &file_drive, file_drive );
