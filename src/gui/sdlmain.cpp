@@ -293,17 +293,6 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	i_flags = flags;
 #endif
 
-#ifdef WIN32
-    if (flags&SDL_NOFRAME) {
-        SDL_SysWMinfo wminfo = { 0 };
-        SDL_GetWMInfo(&wminfo);
-        HWND hwnd = wminfo.window;
-        //SetWindowLong(hwnd, GWL_STYLE, WS_POPUP);
-        
-        SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
-#endif
-
 	return s;
 }
 
@@ -1567,12 +1556,6 @@ void GFX_Events() {
 					CPU_Disable_SkipAutoAdjust();
 				} else {
 					if (sdl.mouse.locked) {
-#ifdef WIN32
-						if (sdl.desktop.fullscreen) {
-							VGA_KillDrawing();
-							GFX_ForceFullscreenExit();
-						}
-#endif
 						GFX_CaptureMouse();
 					}
 					SetPriority(sdl.priority.nofocus);
@@ -2030,6 +2013,8 @@ int main(int argc, char* argv[]) {
 	LOG_MSG("---");
 
 	/* Init SDL */
+    putenv("SDL_VIDEO_WINDOW_POS");
+    putenv("SDL_VIDEO_CENTERED=1");
 #if SDL_VERSION_ATLEAST(1, 2, 14)
 	/* Or debian/ubuntu with older libsdl version as they have done this themselves, but then differently.
 	 * with this variable they will work correctly. I've only tested the 1.2.14 behaviour against the windows version
