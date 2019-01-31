@@ -1546,7 +1546,6 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		aspect_ratio = ((float)width / (float)height) * ( 3.0 / 4.0);
 	}
 
-	aspect_ratio = 1.0; // discard all the previous pixel deformations, we *always* want square pixels
 
 //	LOG_MSG("ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );
 

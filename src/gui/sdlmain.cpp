@@ -504,11 +504,20 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 		fixedHeight = sdl.desktop.window.height;
 		sdl_flags |= SDL_HWSURFACE;
 	}
+
 	if (fixedWidth && fixedHeight) {
 		double ratio_w=(double)fixedWidth/(sdl.draw.width*sdl.draw.scalex);
 		double ratio_h=(double)fixedHeight/(sdl.draw.height*sdl.draw.scaley);
-		if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
-			double scale = min(floor(ratio_w), floor(ratio_h));
+		
+        if (sdl.draw.pixelPerfect && sdl.draw.scaley > 1.0) {
+            // using integer rectangles
+            double scale = floor(ratio_h + 0.001);
+
+            sdl.clip.w = sdl.draw.width * round(scale / sdl.draw.scaley + 0.001);
+            sdl.clip.h = sdl.draw.height * scale;
+        } else if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
+            // using integer squares
+			double scale = min(floor(ratio_w + 0.001), floor(ratio_h + 0.001));
 			sdl.clip.w = sdl.draw.width * scale;
 			sdl.clip.h = sdl.draw.height * scale;
 		} else if (ratio_w < ratio_h) {
@@ -522,6 +531,7 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 			sdl.clip.w=(Bit16u)(sdl.draw.width*sdl.draw.scalex*ratio_h + 0.4);
 			sdl.clip.h=(Bit16u)fixedHeight;
 		}
+
 		if (sdl.desktop.fullscreen && sdl.desktop.borderless)
 			sdl.surface = SDL_SetVideoMode_Wrap(fixedWidth,fixedHeight,bpp,sdl_flags);
 		else if (sdl.desktop.fullscreen)
