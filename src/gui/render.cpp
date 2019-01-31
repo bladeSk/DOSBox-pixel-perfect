@@ -524,6 +524,14 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double scrn_ratio,
 		return;	
 	}
 
+    if (dblw && dblh) {
+        dblw = false;
+        dblh = false;
+    } else if (dblw && !dblh) { // convert double width resolutions to normal width to prevent odd stretching
+        dblw = false;
+        scrn_ratio = width / ((double)height * scrn_ratio * 0.5);
+    }
+
 	ratio = scrn_ratio;
 
 	if ( ratio > 1 ) {

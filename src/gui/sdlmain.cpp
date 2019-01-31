@@ -500,9 +500,9 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 		
         if (sdl.draw.pixelPerfect && sdl.draw.scaley > 1.0) {
             // using integer rectangles
-            double scale = floor(ratio_h + 0.001);
+            double scale = floor(ratio_h + 0.01);
 
-            sdl.clip.w = sdl.draw.width * round(scale / sdl.draw.scaley + 0.001);
+            sdl.clip.w = sdl.draw.width * round(scale / sdl.draw.scaley + 0.01);
             sdl.clip.h = sdl.draw.height * scale;
         } else if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
             // using integer squares
