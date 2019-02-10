@@ -1,4 +1,4 @@
-#define VERSION "SVNr4019 pixel-perfect fork"
+#define VERSION "pixel-perfect fork, version SVN 4019.2"
 
 /* Define to 1 to enable internal debugger, requires libcurses */
 #define C_DEBUG 0
