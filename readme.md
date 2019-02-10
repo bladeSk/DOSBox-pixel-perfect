@@ -4,9 +4,9 @@
 
 This is a modified version of DOSBox with focus on **super crisp visual output**. It uses integer scaling to produce homogenous pixels, supports VSYNC, plays nice with high-DPI displays and adds other enhancements like **savestates**.
 
-## 💾 [Download](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019-savestate/dosbox-pixel-perfect-SVNr4019.2-win.zip)
+## 💾 [Download](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.2/dosbox-pixel-perfect-SVNr4019.2-win.zip)
 
-Get the [latest Windows version](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019-savestate/dosbox-pixel-perfect-SVNr4019.2-win.zip) or check the _releases_ tab.
+Get the [latest Windows version](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.2/dosbox-pixel-perfect-SVNr4019.2-win.zip) or check the _releases_ tab.
 
 In case DOSBox doesn't run (`VCRUNTUME140.dll missing` error), you need to install the [Microsoft Visual C++ 2017 Runtime Library](https://go.microsoft.com/fwlink/?LinkId=746571).
 
