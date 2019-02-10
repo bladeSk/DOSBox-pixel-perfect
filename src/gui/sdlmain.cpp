@@ -2050,6 +2050,7 @@ int main(int argc, char* argv[]) {
 
 #if defined(WIN32)
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE) ConsoleEventHandler,TRUE);
+    SetProcessDPIAware();
 #endif
 
 #ifdef OS2
