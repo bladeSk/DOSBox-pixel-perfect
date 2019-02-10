@@ -29,7 +29,6 @@
 #include <sys/types.h>
 #include <math.h>
 #ifdef WIN32
-#define NOMINMAX
 #include <signal.h>
 #include <process.h>
 #endif
@@ -54,6 +53,7 @@
 #include "cpu.h"
 #include "cross.h"
 #include "control.h"
+#include "render.h"
 #include "../save_state.h"
 
 
@@ -171,7 +171,6 @@ struct SDL_Block {
 		Bitu flags;
 		double scalex,scaley;
 		GFX_CallBack_t callback;
-		bool pixelPerfect;
 	} draw;
 	bool wait_on_error;
 	struct {
@@ -478,6 +477,61 @@ static int int_log2 (int val) {
 }
 
 
+void GetBestIntScale(int maxWidth, int maxHeight, int * outXScale, int * outYScale) {
+    int doubleWidth;
+    double ratio;
+    int width = sdl.draw.width;
+    int height= sdl.draw.height;
+
+    if (render.aspect) {
+        doubleWidth = render.src.dblw && !render.src.dblh ? 2 : 1;
+
+        if (doubleWidth == 2 && sdl.draw.scaley > 1.99) { // fix for 400x300
+            doubleWidth = 1;
+            sdl.draw.scaley = ((double)height * sdl.draw.scaley) / ((double)height * 2.0);
+        }
+
+        ratio = sdl.draw.scalex == 1.0 ? sdl.draw.scaley : 1.0 / sdl.draw.scalex;
+
+        if (ratio != 1.0 && doubleWidth == 2) {
+            ratio = ((double)width * 2.0) / ((double)height * ratio);
+        }
+    } else {
+        doubleWidth = height > width ? 2 : 1;
+        ratio = 1.0;
+    }
+
+    int xScaleSmall, yScaleSmall, xScaleLarge, yScaleLarge;
+    *outXScale = 1 * doubleWidth;
+    *outYScale = 1;
+
+    for (int scale = 2; ; scale++) {
+        if (ratio >= 1.0) {
+            xScaleSmall = (int)round((double)scale * (double)doubleWidth / ratio);
+            yScaleSmall = scale;
+            
+            xScaleLarge = scale * doubleWidth;
+            yScaleLarge = (int)round((double)scale * ratio);
+        } else {
+            xScaleSmall = scale * doubleWidth;
+            yScaleSmall = (int)round((double)scale * ratio);
+
+            xScaleLarge = (int)round((double)scale * (double)doubleWidth / ratio);
+            yScaleLarge = scale;
+        }
+
+        if (width * xScaleLarge <= maxWidth && height * yScaleLarge <= maxHeight) {
+            *outXScale = xScaleLarge;
+            *outYScale = yScaleLarge;
+        } else if (width * xScaleSmall <= maxWidth && height * yScaleSmall <= maxHeight) {
+            *outXScale = xScaleSmall;
+            *outYScale = yScaleSmall;
+        } else {
+            return;
+        }
+    }
+}
+
 static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 	Bit16u fixedWidth;
 	Bit16u fixedHeight;
@@ -499,18 +553,13 @@ static SDL_Surface * GFX_SetupSurfaceScaled(Bit32u sdl_flags, Bit32u bpp) {
 	if (fixedWidth && fixedHeight) {
 		double ratio_w=(double)fixedWidth/(sdl.draw.width*sdl.draw.scalex);
 		double ratio_h=(double)fixedHeight/(sdl.draw.height*sdl.draw.scaley);
-		
-        if (sdl.draw.pixelPerfect && sdl.draw.scaley > 1.0) {
-            // using integer rectangles
-            double scale = floor(ratio_h + 0.01);
 
-            sdl.clip.w = sdl.draw.width * round(scale / sdl.draw.scaley + 0.01);
-            sdl.clip.h = sdl.draw.height * scale;
-        } else if (sdl.draw.pixelPerfect && ratio_w > 1 && ratio_h > 1) {
-            // using integer squares
-			double scale = std::min(floor(ratio_w + 0.001), floor(ratio_h + 0.001));
-			sdl.clip.w = sdl.draw.width * scale;
-			sdl.clip.h = sdl.draw.height * scale;
+        if (render.pixelPerfect) {
+            int scaleX, scaleY;
+            GetBestIntScale(fixedWidth, fixedHeight, &scaleX, &scaleY);
+
+            sdl.clip.w = (Bit16u)(sdl.draw.width * scaleX);
+            sdl.clip.h = (Bit16u)(sdl.draw.height * scaleY);
 		} else if (ratio_w < ratio_h) {
 			sdl.clip.w=fixedWidth;
 			sdl.clip.h=(Bit16u)(sdl.draw.height*sdl.draw.scaley*ratio_w + 0.1); //possible rounding issues
@@ -748,7 +797,7 @@ dosurface:
 		// No borders
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-		if (sdl.opengl.bilinear && !sdl.draw.pixelPerfect) {
+		if (sdl.opengl.bilinear && !render.pixelPerfect) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		} else {
@@ -1310,7 +1359,6 @@ static void GUI_StartUp(Section * sec) {
 	/* Setup Mouse correctly if fullscreen */
 	if(sdl.desktop.fullscreen) GFX_CaptureMouse();
 
-	sdl.draw.pixelPerfect = section->Get_bool("pixelperfect");
 	sdl.desktop.borderless= section->Get_bool("borderless");
 
 	if (output == "surface") {
@@ -1731,9 +1779,6 @@ void Config_Add_SDL() {
 	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,defoutput);
 	Pstring->Set_help("What video system to use for output.");
 	Pstring->Set_values(outputs);
-
-	Pbool = sdl_sec->Add_bool("pixelperfect", Property::Changeable::Always, true);
-	Pbool->Set_help("Adjust scale so that the output pixels are perfect squares. Recommended with with output=openglnb and scaler=none.");
 
 	Pbool = sdl_sec->Add_bool("borderless", Property::Changeable::Always, true);
 	Pbool->Set_help("Use borderless fullscreen window instead of actual fullscreen, this gives us free VSYNC on Vista/7/8/10 (Windows only).");

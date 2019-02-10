@@ -88,6 +88,7 @@ typedef struct {
 	bool active;
 	bool aspect;
 	bool fullFrame;
+    bool pixelPerfect;
 } Render_t;
 
 extern Render_t render;

@@ -523,6 +523,9 @@ void DOSBOX_Init(void) {
 	Pbool = secprop->Add_bool("aspect",Property::Changeable::Always,false);
 	Pbool->Set_help("Do aspect correction, if your output method doesn't support scaling this can slow things down!.");
 
+    Pbool = secprop->Add_bool("pixelperfect", Property::Changeable::Always, true);
+    Pbool->Set_help("Adjust scale so that the output pixels have uniform integer dimensions. Use with: output=openglnb and scaler=none.");
+
 	Pmulti = secprop->Add_multi("scaler",Property::Changeable::Always," ");
 	Pmulti->SetValue("normal2x");
 	Pmulti->Set_help("Scaler used to enlarge/enhance low resolution modes. If 'forced' is appended,\n"

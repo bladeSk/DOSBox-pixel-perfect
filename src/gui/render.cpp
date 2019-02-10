@@ -265,6 +265,12 @@ static void RENDER_Reset( void ) {
 	bool dblw=render.src.dblw;
 	bool dblh=render.src.dblh;
 
+    if ((dblw || dblh) && render.pixelPerfect) {
+        // pixel perfect mode handles doubling on its own
+        dblw = false;
+        dblh = false;
+    }
+
 	double gfx_scalew;
 	double gfx_scaleh;
 	
@@ -524,14 +530,6 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double scrn_ratio,
 		return;	
 	}
 
-    if (dblw && dblh) {
-        dblw = false;
-        dblh = false;
-    } else if (dblw && !dblh) { // convert double width resolutions to normal width to prevent odd stretching
-        dblw = false;
-        scrn_ratio = width / ((double)height * scrn_ratio * 0.5);
-    }
-
 	ratio = scrn_ratio;
 
 	if ( ratio > 1 ) {
@@ -597,6 +595,7 @@ void RENDER_Init(Section * sec) {
 	render.aspect=section->Get_bool("aspect");
 	render.frameskip.max=section->Get_int("frameskip");
 	render.frameskip.count=0;
+    render.pixelPerfect = section->Get_bool("pixelperfect");
 	std::string cline;
 	std::string scaler;
 	//Check for commandline paramters and parse them through the configclass so they get checked against allowed values
