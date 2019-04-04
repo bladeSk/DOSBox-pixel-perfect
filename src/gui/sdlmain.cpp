@@ -294,6 +294,16 @@ SDL_Surface* SDL_SetVideoMode_Wrap(int width,int height,int bpp,Bit32u flags){
 	i_flags = flags;
 #endif
 
+#ifdef WIN32
+    if (flags&SDL_NOFRAME) {
+        SDL_SysWMinfo wminfo = { 0 };
+        SDL_GetWMInfo(&wminfo);
+        HWND hwnd = wminfo.window;
+        SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE);
+        SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+#endif
+
 	return s;
 }
 

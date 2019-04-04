@@ -24,7 +24,7 @@ When `aspect=true`, the aspect ratio is approximated using rectangular pixels. F
 
 ### Borderless fullscreen window / VSYNC
 
-A feature used by modern games that relies on the OS to provide VSYNC. This eliminates screen tearing. Currently works only on Windows 8 or later.
+A feature used by modern games that relies on the OS to provide VSYNC. This eliminates screen tearing.
 
 ## High-DPI support
 
@@ -59,7 +59,7 @@ You can just use the provided config, but if you have your own special `dosbox.c
 
 All the dependencies are included in the source code (under `lib`). You need to build them before you can build DOSBox. I used Visual Studio 2017, but older versions should be fine also. The projects you need to build are:
 
-* `lib\libpng-1.6.29\projects\vstudio\vstudio.sln`
+* `lib\libpng-1.6.29\projects\vstudio\vstudio.sln` (use the "Release Library" configuration)
 * `lib\SDL-1.2.15\VisualC\SDL.sln`
-* `lib\SDL_net-1.2.7\VisualC\SDL_net.sln`
+* `lib\SDL_net-1.2.7\VisualC\SDL_net.sln` (requires MFC to be installed)
 * `visualc_net\dosbox.sln`
