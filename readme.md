@@ -4,9 +4,9 @@
 
 This is a modified version of DOSBox with focus on **super crisp visual output**. It uses integer scaling to produce homogenous pixels, supports VSYNC, plays nice with high-DPI displays and adds other enhancements like **savestates**.
 
-## 💾 [Download](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.2/dosbox-pixel-perfect-SVNr4019.2-win.zip)
+## 💾 [Download](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.3/dosbox-pixel-perfect-SVNr4019.3-win.zip)
 
-Get the [latest Windows version](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.2/dosbox-pixel-perfect-SVNr4019.2-win.zip) or check the _releases_ tab.
+Get the [latest Windows version](https://github.com/bladeSk/DOSBox-pixel-perfect/releases/download/r4019.3/dosbox-pixel-perfect-SVNr4019.3-win.zip) or check the _releases_ tab.
 
 In case DOSBox doesn't run (`VCRUNTUME140.dll missing` error), you need to install the [Microsoft Visual C++ 2017 Runtime Library](https://go.microsoft.com/fwlink/?LinkId=746571).
 
@@ -14,7 +14,7 @@ In case DOSBox doesn't run (`VCRUNTUME140.dll missing` error), you need to insta
 
 ### Pixel perfect mode (aka. integer scaling)
 
-This mode makes the rendered image fill as much of your screen as possible while keeping it scaled to the nearest integer. GPU scaling is used instead of relying on the software scalers.
+This mode makes the rendered image fill as much of your screen as possible while keeping it scaled to the nearest integer. GPU scaling is used instead of relying on software scalers.
 
 The original DOSBox also renders a stretched image to a power-of-two texture, which is then stretched to the screen. This mod creates a texture with exact dimensions. This improves the image quality at the cost of breaking compatibility with very old video cards.
 
@@ -38,6 +38,8 @@ Savestates allow you to save (`Alt+F5`) and load (`Alt+F9`) any game whenever yo
 
 A configuration file with sane defaults is provided. No need to fiddle around with settings, just run it and have fun. The folder `games` is automatically mounted.
 
+The only thing you may want to adjust per-game is the speed of the emulator (`Ctrl+F11`/`Ctrl+F12`). Some games require very low speed (ie. Lemmings needs \~6000 cycles), some may require more speed.
+
 ## DOSBox config
 
 You can just use the provided config, but if you have your own special `dosbox.conf`, make sure your values match the ones below to use the new features. Savestates work automatically, but you need to rebuild your mapper file, if you use one.
@@ -46,12 +48,12 @@ You can just use the provided config, but if you have your own special `dosbox.c
 	fullscreen=true
 	fulldouble=true
 	fullresolution=desktop
-	output=openglnb # pixel-perfect scaling only works with OpenGL!
+	output=openglnb # ⚠ important: pixel-perfect scaling only works with OpenGL!
 	pixelperfect=true # set to false to make the image fill as much of the screen as possible
-    borderless=true # set to false to disable borderless fullscreen
+    borderless=true # prevents screen tearing; set to false to disable borderless fullscreen
 
 	[render]
-	aspect=false # change to true, when circles in-game look like ellipses
+	aspect=false # change to true if circles in your game look like ellipses
 	scaler=none
 
 
@@ -59,7 +61,7 @@ You can just use the provided config, but if you have your own special `dosbox.c
 
 All the dependencies are included in the source code (under `lib`). You need to build them before you can build DOSBox. I used Visual Studio 2017, but older versions should be fine also. The projects you need to build are:
 
-* `lib\libpng-1.6.29\projects\vstudio\vstudio.sln` (use the "Release Library" configuration)
+* `lib\libpng-1.6.29\projects\vstudio\vstudio.sln` - use the "Release Library" configuration
 * `lib\SDL-1.2.15\VisualC\SDL.sln`
-* `lib\SDL_net-1.2.7\VisualC\SDL_net.sln` (requires MFC to be installed)
-* `visualc_net\dosbox.sln`
+* `lib\SDL_net-1.2.7\VisualC\SDL_net.sln` - requires MFC to be installed
+* `visualc_net\dosbox.sln` - requires SDL.dll built in the previous step to be copied next to the .exe file
