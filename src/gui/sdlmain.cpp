@@ -487,12 +487,22 @@ static int int_log2 (int val) {
 }
 
 
+double ToPositiveScale(double value) {
+    return value > 1.0 ? value : 1.0 / value;
+}
+
+/**
+ * Finds the largest integer scale, where the image is contained on the screen (maxWidth x maxHeight).
+ * X and Y scales may be different when aspect ratio correction is enabled or when horizontal pixel
+ * doubling is required.
+ */
 void GetBestIntScale(int maxWidth, int maxHeight, int * outXScale, int * outYScale) {
     int doubleWidth;
     double ratio;
     int width = sdl.draw.width;
     int height= sdl.draw.height;
 
+    // determine if double width is required and calculate correct aspect ratio accordingly
     if (render.aspect) {
         doubleWidth = render.src.dblw && !render.src.dblh ? 2 : 1;
 
@@ -511,23 +521,51 @@ void GetBestIntScale(int maxWidth, int maxHeight, int * outXScale, int * outYSca
         ratio = 1.0;
     }
 
+    double targetAspect = (double)(width * doubleWidth) / ((double)height * ratio);
+    double aspectDifference;
+    const double maxAllowedAspectDifference = 1.15;
+
     int xScaleSmall, yScaleSmall, xScaleLarge, yScaleLarge;
     *outXScale = 1 * doubleWidth;
     *outYScale = 1;
 
+    // Try all the integer scales starting from 2 and save the largest one that fits;
+    // if a scale doesn't fit, return the saved scales.
+    // If an aspect ratio resulting from integer pixels differs too greatly from the intended
+    // aspect ratio, don't do any AR correction.
     for (int scale = 2; ; scale++) {
         if (ratio >= 1.0) {
             xScaleSmall = (int)round((double)scale * (double)doubleWidth / ratio);
             yScaleSmall = scale;
+
+            aspectDifference = ToPositiveScale( ((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect );
+            if (aspectDifference > maxAllowedAspectDifference) {
+                xScaleSmall = scale * doubleWidth;
+            }
             
             xScaleLarge = scale * doubleWidth;
             yScaleLarge = (int)round((double)scale * ratio);
+
+            aspectDifference = ToPositiveScale( ((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect );
+            if (aspectDifference > maxAllowedAspectDifference) {
+                yScaleLarge = scale;
+            }
         } else {
             xScaleSmall = scale * doubleWidth;
             yScaleSmall = (int)round((double)scale * ratio);
 
+            aspectDifference = ToPositiveScale(((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect);
+            if (aspectDifference > maxAllowedAspectDifference) {
+                yScaleSmall = scale;
+            }
+
             xScaleLarge = (int)round((double)scale * (double)doubleWidth / ratio);
             yScaleLarge = scale;
+
+            aspectDifference = ToPositiveScale(((double)(xScaleSmall * width) / (double)(yScaleSmall * height)) / targetAspect);
+            if (aspectDifference > maxAllowedAspectDifference) {
+                xScaleLarge = scale * doubleWidth;
+            }
         }
 
         if (width * xScaleLarge <= maxWidth && height * yScaleLarge <= maxHeight) {
