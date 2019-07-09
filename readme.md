@@ -26,7 +26,7 @@ When `aspect=true`, the aspect ratio is approximated using rectangular pixels. F
 
 A feature used by modern games that relies on the OS to provide VSYNC. This eliminates screen tearing.
 
-## High-DPI support
+### High-DPI support
 
 This DOSBox fork is DPI-aware. When using 150% scaling, the image is no longer blurred.
 
@@ -50,7 +50,7 @@ You can just use the provided config, but if you have your own special `dosbox.c
 	fullresolution=desktop
 	output=openglnb # ⚠ important: pixel-perfect scaling only works with OpenGL!
 	pixelperfect=true # set to false to make the image fill as much of the screen as possible
-    borderless=true # prevents screen tearing; set to false to disable borderless fullscreen
+	borderless=true # prevents screen tearing; set to false to disable borderless fullscreen
 
 	[render]
 	aspect=false # change to true if circles in your game look like ellipses
@@ -59,7 +59,7 @@ You can just use the provided config, but if you have your own special `dosbox.c
 
 ## Building
 
-All the dependencies are included in the source code (under `lib`). You need to build them before you can build DOSBox. I used Visual Studio 2017, but older versions should be fine also. The projects you need to build are:
+All the dependencies are included in the source code (under `lib`). You need to build them before you can build DOSBox. I used Visual Studio 2017, but older versions should be fine also. Build the projects in the following order:
 
 * `lib\libpng-1.6.29\projects\vstudio\vstudio.sln` - use the "Release Library" configuration
 * `lib\SDL-1.2.15\VisualC\SDL.sln`
