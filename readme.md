@@ -1,3 +1,11 @@
+## ℹ️ Notice
+
+This repository has been archived, since more modern DOSBox forks with integer scaling exist now. Most notably [DOSBox-X](https://github.com/joncampbell123/dosbox-x) - not only does it support pixel-perfect rednering (via `output=openglpp`), there are also save states, GUI, Windows 98 support, 3fdx Voodoo 1 emulation, better OPL emulation [and more](https://dosbox-x.com/wiki/DOSBox%E2%80%90X%E2%80%99s-Feature-Highlights). I recommend using DOSBox-X as a more future-proof option, but this repository will be kept archived for anyone interested.
+
+Original readme below.
+
+---
+
 # DOSBox - Pixel-perfect mod + vsync + savestates
 
 <p align="center"><img src="https://cloud.githubusercontent.com/assets/4263742/23454383/521f32ae-fe6c-11e6-8be2-8f6471b24ed3.png" alt="DOSBox original vs pixel-perfect mod"/></p>
